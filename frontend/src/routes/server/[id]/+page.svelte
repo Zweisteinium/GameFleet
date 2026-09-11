@@ -4,8 +4,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { api } from '$lib/api/ApiService';
 	import type { GameServerPublic } from '$lib/api/Api';
-	import type { LiveServerInfo } from '$lib/api/types';
 	import { gameArtUrl, gameLabel, isMinecraft } from '$lib/games';
+	import { live, restoreLive, refreshServer, forgetServer } from '$lib/live.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
@@ -16,18 +16,20 @@
 	import PlayersBar from '$lib/components/PlayersBar.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
 
 	const REFRESH_INTERVAL_MS = 30000;
 
 	let server = $state<GameServerPublic | null>(null);
-	let liveInfo = $state<LiveServerInfo | null>(null);
 	let loading = $state(true);
-	let refreshing = $state(false);
 	let error = $state<string | null>(null);
 	let editing = $state(false);
 	let refreshInterval: ReturnType<typeof setInterval>;
 
-	const serverId = page.params.id;
+	const serverId = page.params.id ?? '';
+	// Live data comes from the shared cache: instant when arriving from the dashboard, refreshed in the background.
+	const liveInfo = $derived(live.info[serverId] ?? null);
+	const refreshing = $derived(live.pending[serverId] ?? false);
 
 	async function fetchServerData() {
 		if (!serverId) {
@@ -36,12 +38,7 @@
 			return;
 		}
 		try {
-			const [serverResponse, liveResponse] = await Promise.all([
-				api.serverId.getServerById(serverId),
-				api.serverId.getServerLiveInfoById(serverId)
-			]);
-			server = serverResponse.data;
-			liveInfo = liveResponse.data;
+			server = (await api.serverId.getServerById(serverId)).data;
 			error = null;
 		} catch (err) {
 			console.error('Failed to fetch server data:', err);
@@ -49,24 +46,18 @@
 		} finally {
 			loading = false;
 		}
+		await refreshServer(serverId);
 	}
 
 	async function refreshLiveInfo() {
-		if (!serverId) return;
-		refreshing = true;
-		try {
-			liveInfo = (await api.serverId.getServerLiveInfoById(serverId)).data;
-		} catch (err) {
-			console.error('Failed to refresh live info:', err);
-		} finally {
-			refreshing = false;
-		}
+		if (serverId) await refreshServer(serverId);
 	}
 
 	async function deleteServer() {
 		if (!server || !confirm(`Remove "${server.name}" from GameFleet?`)) return;
 		try {
 			await api.serverId.deleteServer(server.id);
+			forgetServer(server.id);
 			goto('/main');
 		} catch (err) {
 			console.error('Failed to delete server:', err);
@@ -81,6 +72,7 @@
 	}
 
 	onMount(() => {
+		restoreLive();
 		fetchServerData();
 		refreshInterval = setInterval(refreshLiveInfo, REFRESH_INTERVAL_MS);
 	});
@@ -128,7 +120,7 @@
 		<p class="text-ink-2 mt-1 mb-6 text-sm">{error}</p>
 		<a href="/main" class="btn-primary">Back to dashboard</a>
 	</div>
-{:else if server && liveInfo}
+{:else if server}
 	<div class="rise mt-4 space-y-5">
 		<!-- Hero -->
 		<section class="card relative overflow-hidden">
@@ -153,7 +145,7 @@
 				<div class="flex items-end gap-5">
 					<GameArt
 						game={server.game}
-						serverIcon={liveInfo.icon}
+						serverIcon={liveInfo?.icon}
 						class="h-36 w-24 shrink-0 rounded-xl shadow-pop"
 					/>
 					<div class="min-w-0 pb-1">
@@ -161,7 +153,9 @@
 							{gameLabel(server.game)}
 						</p>
 						<h1 class="font-display mt-1 text-3xl font-semibold tracking-tight">{server.name}</h1>
-						{#if liveInfo.server_name && liveInfo.server_name !== server.name}
+						{#if !liveInfo}
+							<Skeleton class="mt-2 h-4 w-56" />
+						{:else if liveInfo.server_name && liveInfo.server_name !== server.name}
 							<p class="text-ink-2 mt-1 truncate text-sm">“{liveInfo.server_name}”</p>
 						{/if}
 						<div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -182,7 +176,15 @@
 				</div>
 
 				<div class="flex flex-col items-start gap-3 md:items-end">
-					<StatusBadge status={liveInfo.status} size="md" />
+					{#if liveInfo}
+						<StatusBadge
+							status={liveInfo.status}
+							size="md"
+							isChecking={refreshing && liveInfo.status === 'unknown'}
+						/>
+					{:else}
+						<Skeleton class="h-8 w-24 rounded-full" />
+					{/if}
 					<div class="flex gap-2">
 						<button class="btn-outline h-9" onclick={refreshLiveInfo} disabled={refreshing}>
 							<Icon name="refresh" size={15} class={refreshing ? 'animate-spin' : ''} />Refresh
@@ -206,152 +208,178 @@
 			</p>
 		{/if}
 
-		{#if liveInfo.error_message}
-			<div
-				class="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300"
-			>
-				<Icon name="alert" size={18} class="mt-0.5" />
-				<div>
-					<p class="font-semibold">Could not read live data</p>
-					<p class="mt-0.5 opacity-90">{liveInfo.error_message}</p>
+		{#if !liveInfo}
+			<!-- Live data placeholders -->
+			<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+				{#each [0, 1, 2, 3] as i (i)}
+					<div class="card flex items-center gap-3 p-4">
+						<Skeleton class="h-10 w-10 rounded-xl" />
+						<div class="flex-1 space-y-2">
+							<Skeleton class="h-3 w-16" /><Skeleton class="h-5 w-24" />
+						</div>
+					</div>
+				{/each}
+			</div>
+			<div class="grid gap-5 lg:grid-cols-5">
+				<div class="card space-y-3 p-5 lg:col-span-3">
+					<Skeleton class="h-5 w-40" /><Skeleton class="h-3 w-24" /><Skeleton
+						class="h-12 w-full rounded-xl"
+					/>
+				</div>
+				<div class="card space-y-3 p-5 lg:col-span-2">
+					<Skeleton class="h-5 w-32" /><Skeleton class="h-9 w-full rounded-xl" /><Skeleton
+						class="h-9 w-full rounded-xl"
+					/>
 				</div>
 			</div>
-		{/if}
-
-		<!-- Stats -->
-		<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-			<div class="card col-span-2 flex items-center gap-3 p-4 md:col-span-1">
-				<span
-					class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent"
-					><Icon name="users" size={18} /></span
+		{:else}
+			{#if liveInfo.error_message}
+				<div
+					class="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300"
 				>
-				<div class="min-w-0 flex-1">
-					<p class="text-ink-3 text-[11px] font-semibold tracking-wide uppercase">Players</p>
-					{#if liveInfo.players_online != null}
-						<PlayersBar online={liveInfo.players_online} max={liveInfo.players_max} />
-					{:else}
-						<p class="font-display text-xl font-semibold">—</p>
-					{/if}
+					<Icon name="alert" size={18} class="mt-0.5" />
+					<div>
+						<p class="font-semibold">Could not read live data</p>
+						<p class="mt-0.5 opacity-90">{liveInfo.error_message}</p>
+					</div>
 				</div>
+			{/if}
+
+			<!-- Stats -->
+			<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+				<div class="card col-span-2 flex items-center gap-3 p-4 md:col-span-1">
+					<span
+						class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent"
+						><Icon name="users" size={18} /></span
+					>
+					<div class="min-w-0 flex-1">
+						<p class="text-ink-3 text-[11px] font-semibold tracking-wide uppercase">Players</p>
+						{#if liveInfo.players_online != null}
+							<PlayersBar online={liveInfo.players_online} max={liveInfo.players_max} />
+						{:else}
+							<p class="font-display text-xl font-semibold">—</p>
+						{/if}
+					</div>
+				</div>
+				{#if liveInfo.latency != null}
+					<StatCard
+						icon="zap"
+						title="Latency"
+						value="{Math.trunc(liveInfo.latency)} ms"
+						tone="warning"
+					/>
+				{/if}
+				{#if liveInfo.version}
+					<StatCard icon="tag" title="Version" value={liveInfo.version} />
+				{/if}
+				{#if liveInfo.map_name || liveInfo.game_mode}
+					<StatCard
+						icon="map"
+						title={liveInfo.map_name ? 'Map' : 'Mode'}
+						value={liveInfo.map_name ?? liveInfo.game_mode ?? ''}
+						tone="success"
+					/>
+				{/if}
 			</div>
-			{#if liveInfo.latency != null}
-				<StatCard
-					icon="zap"
-					title="Latency"
-					value="{Math.trunc(liveInfo.latency)} ms"
-					tone="warning"
-				/>
-			{/if}
-			{#if liveInfo.version}
-				<StatCard icon="tag" title="Version" value={liveInfo.version} />
-			{/if}
-			{#if liveInfo.map_name || liveInfo.game_mode}
-				<StatCard
-					icon="map"
-					title={liveInfo.map_name ? 'Map' : 'Mode'}
-					value={liveInfo.map_name ?? liveInfo.game_mode ?? ''}
-					tone="success"
-				/>
-			{/if}
-		</div>
 
-		<div class="grid gap-5 lg:grid-cols-5">
-			<!-- Info -->
-			<section class="card p-5 lg:col-span-3">
-				<h3 class="section-title mb-4">
-					<Icon name="info" size={16} class="text-ink-3" />Server information
-				</h3>
-				<dl class="space-y-4">
-					{#if liveInfo.description}
-						<div>
-							<dt class="label">Description</dt>
-							<dd class="bg-surface-2 rounded-xl px-3 py-2 text-sm">
-								{#if isMinecraft(server.game)}
-									<MinecraftMOTD motd={liveInfo.description} />
+			<div class="grid gap-5 lg:grid-cols-5">
+				<!-- Info -->
+				<section class="card p-5 lg:col-span-3">
+					<h3 class="section-title mb-4">
+						<Icon name="info" size={16} class="text-ink-3" />Server information
+					</h3>
+					<dl class="space-y-4">
+						{#if liveInfo.description}
+							<div>
+								<dt class="label">Description</dt>
+								<dd class="bg-surface-2 rounded-xl px-3 py-2 text-sm">
+									{#if isMinecraft(server.game)}
+										<MinecraftMOTD motd={liveInfo.description} />
+									{:else}
+										{liveInfo.description}
+									{/if}
+								</dd>
+							</div>
+						{/if}
+						{#if liveInfo.game_mode && liveInfo.map_name}
+							<div>
+								<dt class="label">Game mode</dt>
+								<dd class="text-sm font-medium">{liveInfo.game_mode}</dd>
+							</div>
+						{/if}
+						{#if !liveInfo.description && !(liveInfo.game_mode && liveInfo.map_name)}
+							<p class="text-ink-3 text-sm">This server does not publish a description.</p>
+						{/if}
+					</dl>
+				</section>
+
+				<!-- Players -->
+				<section class="card p-5 lg:col-span-2">
+					<h3 class="section-title mb-4">
+						<Icon name="users" size={16} class="text-ink-3" />
+						Players online
+						{#if liveInfo.player_list?.length}<span class="text-ink-3 font-sans text-sm font-normal"
+								>({liveInfo.player_list.length})</span
+							>{/if}
+					</h3>
+					{#if liveInfo.player_list && liveInfo.player_list.length > 0}
+						<ul class="max-h-80 space-y-1.5 overflow-y-auto pr-1">
+							{#each liveInfo.player_list as player, index (index)}
+								<li class="bg-surface-2 flex items-center gap-3 rounded-xl px-3 py-2">
+									<span
+										class="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent"
+									>
+										{player.charAt(0).toUpperCase()}
+									</span>
+									<span class="truncate text-sm">{player}</span>
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="text-ink-3 py-6 text-center text-sm">
+							{liveInfo.players_online
+								? 'This server does not publish player names.'
+								: 'Nobody is online right now.'}
+						</p>
+					{/if}
+				</section>
+			</div>
+
+			<GameDetails info={liveInfo} />
+
+			{#if liveInfo.mods && liveInfo.mods.length > 0}
+				<section class="card p-5">
+					<h3 class="section-title mb-4">
+						<Icon name="layers" size={16} class="text-ink-3" />Mods
+						<span class="text-ink-3 font-sans text-sm font-normal">({liveInfo.mods.length})</span>
+					</h3>
+					<ul class="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
+						{#each liveInfo.mods as mod, index (index)}
+							<li class="bg-surface-2 min-w-0 rounded-xl px-3 py-2">
+								{#if mod.url}
+									<a
+										href={mod.url}
+										target="_blank"
+										rel="noreferrer"
+										class="flex items-center gap-1.5 truncate text-sm font-medium hover:text-accent"
+									>
+										{mod.name || `Mod ${mod.id}`}<Icon
+											name="external-link"
+											size={12}
+											class="text-ink-3"
+										/>
+									</a>
 								{:else}
-									{liveInfo.description}
+									<p class="truncate text-sm font-medium">
+										{mod.name || (mod.id ? `Mod ${mod.id}` : 'Unknown mod')}
+									</p>
 								{/if}
-							</dd>
-						</div>
-					{/if}
-					{#if liveInfo.game_mode && liveInfo.map_name}
-						<div>
-							<dt class="label">Game mode</dt>
-							<dd class="text-sm font-medium">{liveInfo.game_mode}</dd>
-						</div>
-					{/if}
-					{#if !liveInfo.description && !(liveInfo.game_mode && liveInfo.map_name)}
-						<p class="text-ink-3 text-sm">This server does not publish a description.</p>
-					{/if}
-				</dl>
-			</section>
-
-			<!-- Players -->
-			<section class="card p-5 lg:col-span-2">
-				<h3 class="section-title mb-4">
-					<Icon name="users" size={16} class="text-ink-3" />
-					Players online
-					{#if liveInfo.player_list?.length}<span class="text-ink-3 font-sans text-sm font-normal"
-							>({liveInfo.player_list.length})</span
-						>{/if}
-				</h3>
-				{#if liveInfo.player_list && liveInfo.player_list.length > 0}
-					<ul class="max-h-80 space-y-1.5 overflow-y-auto pr-1">
-						{#each liveInfo.player_list as player, index (index)}
-							<li class="bg-surface-2 flex items-center gap-3 rounded-xl px-3 py-2">
-								<span
-									class="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent"
-								>
-									{player.charAt(0).toUpperCase()}
-								</span>
-								<span class="truncate text-sm">{player}</span>
+								{#if mod.version}<p class="text-ink-3 text-xs">v{mod.version}</p>{/if}
 							</li>
 						{/each}
 					</ul>
-				{:else}
-					<p class="text-ink-3 py-6 text-center text-sm">
-						{liveInfo.players_online
-							? 'This server does not publish player names.'
-							: 'Nobody is online right now.'}
-					</p>
-				{/if}
-			</section>
-		</div>
-
-		<GameDetails info={liveInfo} />
-
-		{#if liveInfo.mods && liveInfo.mods.length > 0}
-			<section class="card p-5">
-				<h3 class="section-title mb-4">
-					<Icon name="layers" size={16} class="text-ink-3" />Mods
-					<span class="text-ink-3 font-sans text-sm font-normal">({liveInfo.mods.length})</span>
-				</h3>
-				<ul class="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
-					{#each liveInfo.mods as mod, index (index)}
-						<li class="bg-surface-2 min-w-0 rounded-xl px-3 py-2">
-							{#if mod.url}
-								<a
-									href={mod.url}
-									target="_blank"
-									rel="noreferrer"
-									class="flex items-center gap-1.5 truncate text-sm font-medium hover:text-accent"
-								>
-									{mod.name || `Mod ${mod.id}`}<Icon
-										name="external-link"
-										size={12}
-										class="text-ink-3"
-									/>
-								</a>
-							{:else}
-								<p class="truncate text-sm font-medium">
-									{mod.name || (mod.id ? `Mod ${mod.id}` : 'Unknown mod')}
-								</p>
-							{/if}
-							{#if mod.version}<p class="text-ink-3 text-xs">v{mod.version}</p>{/if}
-						</li>
-					{/each}
-				</ul>
-			</section>
+				</section>
+			{/if}
 		{/if}
 	</div>
 {/if}

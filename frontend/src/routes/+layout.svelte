@@ -14,10 +14,10 @@
 </svelte:head>
 
 <div class="relative min-h-screen">
-	<div class="bg-grid pointer-events-none absolute inset-x-0 top-0 h-72"></div>
+	<div class="page-tint pointer-events-none absolute inset-x-0 top-0 h-80"></div>
 
 	<header class="relative z-10">
-		<div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+		<div class="mx-auto flex h-16 max-w-[90rem] items-center justify-between px-4 sm:px-6">
 			<a href="/main" class="flex items-center gap-2.5" aria-label="GameFleet home">
 				<span
 					class="grid h-9 w-9 place-items-center rounded-xl text-white shadow-card"
@@ -49,7 +49,7 @@
 		</div>
 	</header>
 
-	<main class="relative z-10 mx-auto max-w-7xl px-4 pb-16 sm:px-6">
+	<main class="relative z-10 mx-auto max-w-[90rem] px-4 pb-16 sm:px-6">
 		{@render children?.()}
 	</main>
 </div>

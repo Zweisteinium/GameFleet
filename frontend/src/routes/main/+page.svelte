@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { api } from '$lib/api/ApiService';
-	import { ServerStatus, type GameServerPublic, type GameServerType } from '$lib/api/Api';
-	import type { LiveServerInfo } from '$lib/api/types';
+	import { ServerStatus, type GameServerPublic } from '$lib/api/Api';
 	import { gameLabel } from '$lib/games';
+	import { live, restoreLive, refreshServers } from '$lib/live.svelte';
 	import { loadPref, savePref } from '$lib/prefs';
 	import ServerCard from '$lib/components/ServerCard.svelte';
 	import ServerForm from '$lib/components/ServerForm.svelte';
@@ -24,7 +24,6 @@
 	};
 
 	let gameServers = $state<GameServerPublic[]>([]);
-	let serverLiveInfo = $state<Record<string, LiveServerInfo>>({});
 	let loading = $state(true);
 	let refreshing = $state(false);
 	let showForm = $state(false);
@@ -32,7 +31,8 @@
 	let toolbar = $state<ToolbarState>(DEFAULT_TOOLBAR);
 	let refreshTimer: ReturnType<typeof setInterval>;
 
-	const infos = $derived(Object.values(serverLiveInfo));
+	const serverLiveInfo = $derived(live.info);
+	const infos = $derived(gameServers.map((s) => live.info[s.id]).filter(Boolean));
 	const onlineCount = $derived(infos.filter((info) => info.status === ServerStatus.Online).length);
 	const offlineCount = $derived(
 		infos.filter((info) => info.status === ServerStatus.Offline).length
@@ -103,11 +103,9 @@
 	async function refreshLiveInfo() {
 		refreshing = true;
 		try {
-			// One request: the backend queries every server concurrently.
-			serverLiveInfo = (await api.liveInfo.getAllServersLiveInfo()).data;
+			// One request per server, in parallel: fast servers fill in while slow ones are still loading.
+			await refreshServers(gameServers.map((s) => s.id));
 			lastRefresh = new Date();
-		} catch (error) {
-			console.error('Failed to fetch live info:', error);
 		} finally {
 			refreshing = false;
 		}
@@ -115,6 +113,7 @@
 
 	onMount(async () => {
 		toolbar = loadPref('dashboard', DEFAULT_TOOLBAR);
+		restoreLive();
 		await loadServers();
 		loading = false;
 		await refreshLiveInfo();
@@ -208,13 +207,22 @@
 		{:else if toolbar.view === 'list'}
 			<div class="space-y-2">
 				{#each visibleServers as server (server.id)}
-					<ServerCard {server} liveInfo={serverLiveInfo[server.id]} variant="list" />
+					<ServerCard
+						{server}
+						liveInfo={serverLiveInfo[server.id]}
+						pending={live.pending[server.id]}
+						variant="list"
+					/>
 				{/each}
 			</div>
 		{:else}
-			<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+			<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
 				{#each visibleServers as server (server.id)}
-					<ServerCard {server} liveInfo={serverLiveInfo[server.id]} />
+					<ServerCard
+						{server}
+						liveInfo={serverLiveInfo[server.id]}
+						pending={live.pending[server.id]}
+					/>
 				{/each}
 			</div>
 		{/if}

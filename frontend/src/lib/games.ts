@@ -33,6 +33,11 @@ export function gameArtUrl(game: GameServerType, kind: 'poster' | 'hero'): strin
 	return `${API_BASE_URL}/api/games/${game}/${kind}`;
 }
 
+/** Games whose default artwork is an icon rather than a poster; shown framed like a server icon. */
+export function hasIconArt(game: GameServerType): boolean {
+	return isMinecraft(game);
+}
+
 export function isMinecraft(game: GameServerType): boolean {
 	return game === GameServerType.Minecraft || game === GameServerType.MinecraftBedrock;
 }
