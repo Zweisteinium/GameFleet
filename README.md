@@ -1,14 +1,26 @@
 # GameFleet
 
-Simple dashboard to keep track of your game servers. Shows who's online and if servers are running.
+A small, self-hosted dashboard for your game servers. It shows which servers are up, who is playing, and whatever else each game is willing to tell you: map, version, mods, in-game day, MOTD and more.
 
-## What it does
+![GameFleet dashboard](docs/dashboard-dark.png)
 
-- Monitor different game servers in one place
-- See player counts and server status at real-time
-- Displays all fetchable server info like ping, player count (current/max), description, server icon, etc.
-- Web interface that updates automatically
-- Easy to run with Docker
+<details>
+<summary>More screenshots</summary>
+
+![Light theme](docs/dashboard-light.png)
+![Server detail](docs/server-detail.png)
+
+</details>
+
+## Features
+
+- One dashboard for all your servers, with search, per-game filters, status filter, sorting and grid/list views
+- Live status, player counts and player names (where the game publishes them), refreshed every 30 seconds
+- Per-game details: Minecraft MOTD and server icon, ARK day/cluster/mods, Factorio evolution and tags, raw A2S rules for Steam games
+- Real game artwork, downloaded once and cached locally by the backend
+- Light and dark theme
+- FastAPI backend with OpenAPI docs, SvelteKit frontend, PostgreSQL storage
+- Ships as two Docker images
 
 ## Supported games
 
@@ -23,104 +35,96 @@ Simple dashboard to keep track of your game servers. Shows who's online and if s
 | Valheim, Rust, 7 Days to Die, Palworld, Project Zomboid, Enshrouded, V Rising, Conan Exiles, DayZ, Counter-Strike, Team Fortress 2, Garry's Mod, Unturned | Steam A2S | Default query ports are prefilled per game; override the query port if your server uses a different one. |
 | Any other Steam game | Steam A2S | Pick "Steam game (A2S)" and enter the query port. |
 
-Game artwork (posters and hero banners) is downloaded once from the Steam CDN / Minecraft wiki and cached on disk by the backend (`ASSET_CACHE_DIR`, default `backend/data/assets`; a named volume in `docker-compose.yml`).
+The **port** of a server is always the port players connect to. The query port and RCON port only need to be set when they differ from the game's defaults, which the add-server form shows.
 
-The `port` of a server is always the port players connect to. The query port (and RCON port) only need to be set when they differ from the game's defaults.
+## Quick start (Docker)
 
-## Setup
+You need Docker and a PostgreSQL database. The compose file runs the backend with host networking, so any Postgres reachable from the host works. To run one alongside:
 
-You'll need Docker installed.
+```bash
+docker run -d --name gamefleet-postgres --restart unless-stopped \
+  -e POSTGRES_USER=gamefleet_user -e POSTGRES_PASSWORD=changeme -e POSTGRES_DB=gamefleet_db \
+  -p 5432:5432 -v gamefleet-postgres:/var/lib/postgresql/data postgres:16
+```
 
-1. **Get the code**
-   ```bash
-   git clone https://github.com/H3xaChad/GameFleet.git
-   cd GameFleet
-   ```
+Then:
 
-2. **Set up config**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your database info
-   ```
+```bash
+git clone https://github.com/H3xaChad/GameFleet.git
+cd GameFleet
+cp .env.example .env      # set DB_PASSWORD (and anything else you want to change)
+make up                   # builds and starts backend + frontend in the background
+```
 
-3. **Run it**
-   ```bash
-   make up
-   ```
+- Dashboard: http://localhost:3000
+- API docs: http://localhost:8000/swagger
 
-4. **Open in browser**
-   - Main app: http://localhost:3000
-   - API: http://localhost:8000
+The database schema is created and upgraded automatically when the backend starts. Game artwork is cached in the `gamefleet-assets` volume.
+
+Prebuilt images are published as `h3xachad/gamefleet-backend` and `h3xachad/gamefleet-frontend`; see `docker-compose-example.yml` for using them.
+
+## Configuration
+
+`.env` in the repository root (used by `docker-compose.yml`):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `localhost`, `5432`, `gamefleet_db`, `gamefleet_user`, – | PostgreSQL connection |
+| `BACKEND_PORT` | `8000` | Backend port (host network) |
+| `FRONTEND_PORT` | `3000` | Published frontend port |
+| `FRONTEND_TARGET` | `node-server` | `node-server` or `nginx-server` image variant |
+| `ASSET_CACHE_DIR` | `data/assets` | Where the backend stores downloaded game artwork |
+| `UV_LINK_MODE` | – | Set to `copy` if your uv cache and project live on different filesystems |
+
+`backend/.env` (used when running the backend natively): `DATABASE_URL` (asyncpg URL) and `DATABASE_URL_SYNC` (psycopg2 URL, only for Alembic).
 
 ## Development
 
-### Running locally
+Prerequisites: [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io/), Docker (for Postgres), Python 3.13, Node 22.
 
-**Backend:**
 ```bash
+# database (or use any Postgres; adjust backend/.env)
+docker run -d --name gamefleet-postgres -e POSTGRES_USER=gamefleet_user -e POSTGRES_PASSWORD=gamefleet_pass \
+  -e POSTGRES_DB=gamefleet_db -p 5432:5432 -v gamefleet-postgres:/var/lib/postgresql/data postgres:16
+
+# backend on http://localhost:8000
 cd backend
-make dev
-```
+uv sync
+make dev            # = uv run uvicorn gamefleet_backend.main:app --reload
 
-**Frontend:**
-```bash
+# frontend on http://localhost:3000
 cd frontend
+pnpm install
 pnpm dev
 ```
 
-### Building with Docker
+Useful frontend scripts: `pnpm check` (svelte-check), `pnpm build`, `pnpm lint`, and `pnpm swagger` to regenerate `src/lib/api/Api.ts` from the running backend's OpenAPI schema. Run it whenever you change API models.
 
-**Development mode:**
-```bash
-make dev
+Append `?theme=light` or `?theme=dark` to any URL to force a theme (useful for sharing links).
+
+### Adding a game
+
+1. Add a value to `GameServerType` and a `GameSpec` (protocol, default port, query-port rule) to `GAME_CATALOG` in `backend/src/gamefleet_backend/models/game_server_type.py`.
+2. Steam games only need their app id in `STEAM_APP_IDS` (`services/game_asset_service.py`) for artwork; other games can list explicit image URLs there.
+3. Add the display label in `frontend/src/lib/games.ts` and run `pnpm swagger`.
+
+Games that speak A2S need no query code. Anything else gets a module in `backend/src/gamefleet_backend/lib/query/` returning one of the `*ServerInfo` models.
+
+### Project layout
+
+```
+backend/   FastAPI + SQLModel. api/ (routes), services/ (live info, docker, assets),
+           lib/query/ (one module per protocol), models/ (API models + game catalog), db/
+frontend/  SvelteKit (static adapter) + Tailwind v4. lib/components/, routes/main, routes/server/[id]
+docs/      screenshots
 ```
 
-**Production mode:**
-```bash
-make up
-```
+## Make targets
 
-### Deployment
+Root `Makefile` (Docker): `make dev` (foreground with build), `make up`, `make down`, `make restart`, `make logs`, `make build`, `make release` (build, tag and push images), `make clean`.
 
-To deploy the existing Docker image (when available):
-```bash
-docker pull h3xachad/gamefleet-backend:latest
-docker pull h3xachad/gamefleet-frontend:latest
-# Then use your preferred orchestration method (docker-compose, k8s, etc.)
-```
-
-## Commands
-
-```bash
-make dev     # Development mode
-make up      # Production mode  
-make down    # Stop everything
-make logs    # See logs
-make clean   # Clean up
-```
-
-## Supported Games
-
-Works with:
-- Minecraft Java Edition
-- Satisfactory
-
-Working on:
-- Minecraft Bedrock
-- Factorio
-- ARK
-
-## Config
-
-Main settings in `.env`:
-
-| Setting | What it does |
-|---------|--------------|
-| `DB_HOST` | Where your database is |
-| `DB_PASSWORD` | Database password |
-| `BACKEND_PORT` | API port (default 8000) |
-| `FRONTEND_PORT` | Web port (default 3000) |
+`backend/Makefile` (native): `make dev`, `make start`, `make migrate`, `make createmigration`.
 
 ## License
 
-MIT License - do whatever you want with it.
+See [LICENSE](LICENSE).

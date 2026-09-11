@@ -5,7 +5,7 @@
 	interface Props {
 		game: GameServerType;
 		kind?: 'poster' | 'hero';
-		/** Base64 PNG advertised by the server itself (Minecraft); takes precedence over the game poster. */
+		/** Base64 PNG advertised by the server itself (Minecraft); shown centered inside the poster frame. */
 		serverIcon?: string | null;
 		class?: string;
 	}
@@ -21,7 +21,6 @@
 				: `data:image/png;base64,${serverIcon}`
 			: null
 	);
-	const src = $derived(iconSrc ?? gameArtUrl(game, kind));
 	const label = $derived(gameLabel(game));
 
 	// Deterministic hue per game for the fallback tile.
@@ -37,13 +36,29 @@
 	);
 </script>
 
-{#if !failed}
+{#if iconSrc}
+	<!-- Square server icons keep the same frame as game posters: a blurred copy fills the frame, the icon sits centered. -->
+	<div class="relative overflow-hidden {className}" aria-label={label}>
+		<img
+			src={iconSrc}
+			alt=""
+			aria-hidden="true"
+			class="absolute inset-0 h-full w-full scale-150 object-cover opacity-70 blur-md"
+		/>
+		<div class="absolute inset-0 bg-black/10"></div>
+		<img
+			src={iconSrc}
+			alt={label}
+			class="image-pixelated absolute top-1/2 left-1/2 w-[72%] -translate-x-1/2 -translate-y-1/2 rounded-md shadow-lg"
+		/>
+	</div>
+{:else if !failed}
 	<img
-		{src}
+		src={gameArtUrl(game, kind)}
 		alt={label}
 		loading="lazy"
 		decoding="async"
-		class="object-cover {className} {iconSrc ? 'image-pixelated aspect-square h-auto!' : ''}"
+		class="object-cover {className}"
 		onerror={() => (failed = true)}
 	/>
 {:else}
