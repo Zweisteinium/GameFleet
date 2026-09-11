@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import servers, docker
+from .api import servers, docker, games
 from .db.session import init_db
 
 
@@ -32,6 +32,7 @@ app.add_middleware(
 
 app.include_router(servers.router, prefix="/api/servers", tags=["servers"])
 app.include_router(docker.router, prefix="/api/docker", tags=["docker"])
+app.include_router(games.router, prefix="/api/games", tags=["games"])
 
 @app.get("/")
 def root():

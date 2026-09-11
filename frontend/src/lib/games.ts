@@ -1,36 +1,38 @@
-import { GameServerType } from '$lib/api/Api'
+import { GameServerType } from '$lib/api/Api';
+import { API_BASE_URL } from '$lib/api/ApiService';
 
-export const GAME_META: Record<GameServerType, { label: string; emoji: string }> = {
-    [GameServerType.Minecraft]: { label: 'Minecraft (Java)', emoji: '⛏️' },
-    [GameServerType.MinecraftBedrock]: { label: 'Minecraft (Bedrock)', emoji: '🧱' },
-    [GameServerType.Factorio]: { label: 'Factorio', emoji: '⚙️' },
-    [GameServerType.Satisfactory]: { label: 'Satisfactory', emoji: '🏭' },
-    [GameServerType.ArkAse]: { label: 'ARK: Survival Evolved', emoji: '🦖' },
-    [GameServerType.ArkAsa]: { label: 'ARK: Survival Ascended', emoji: '🦕' },
-    [GameServerType.Valheim]: { label: 'Valheim', emoji: '🪓' },
-    [GameServerType.Rust]: { label: 'Rust', emoji: '🔩' },
-    [GameServerType.SevenDaysToDie]: { label: '7 Days to Die', emoji: '🧟' },
-    [GameServerType.Palworld]: { label: 'Palworld', emoji: '🐾' },
-    [GameServerType.ProjectZomboid]: { label: 'Project Zomboid', emoji: '🏚️' },
-    [GameServerType.Enshrouded]: { label: 'Enshrouded', emoji: '🌫️' },
-    [GameServerType.VRising]: { label: 'V Rising', emoji: '🧛' },
-    [GameServerType.ConanExiles]: { label: 'Conan Exiles', emoji: '⚔️' },
-    [GameServerType.Dayz]: { label: 'DayZ', emoji: '🩸' },
-    [GameServerType.CounterStrike]: { label: 'Counter-Strike', emoji: '🔫' },
-    [GameServerType.TeamFortress2]: { label: 'Team Fortress 2', emoji: '🎩' },
-    [GameServerType.GarrysMod]: { label: "Garry's Mod", emoji: '🔧' },
-    [GameServerType.Unturned]: { label: 'Unturned', emoji: '🟩' },
-    [GameServerType.Steam]: { label: 'Steam game (A2S)', emoji: '♨️' }
-}
+export const GAME_LABELS: Record<GameServerType, string> = {
+	[GameServerType.Minecraft]: 'Minecraft (Java)',
+	[GameServerType.MinecraftBedrock]: 'Minecraft (Bedrock)',
+	[GameServerType.Factorio]: 'Factorio',
+	[GameServerType.Satisfactory]: 'Satisfactory',
+	[GameServerType.ArkAse]: 'ARK: Survival Evolved',
+	[GameServerType.ArkAsa]: 'ARK: Survival Ascended',
+	[GameServerType.Valheim]: 'Valheim',
+	[GameServerType.Rust]: 'Rust',
+	[GameServerType.SevenDaysToDie]: '7 Days to Die',
+	[GameServerType.Palworld]: 'Palworld',
+	[GameServerType.ProjectZomboid]: 'Project Zomboid',
+	[GameServerType.Enshrouded]: 'Enshrouded',
+	[GameServerType.VRising]: 'V Rising',
+	[GameServerType.ConanExiles]: 'Conan Exiles',
+	[GameServerType.Dayz]: 'DayZ',
+	[GameServerType.CounterStrike]: 'Counter-Strike',
+	[GameServerType.TeamFortress2]: 'Team Fortress 2',
+	[GameServerType.GarrysMod]: "Garry's Mod",
+	[GameServerType.Unturned]: 'Unturned',
+	[GameServerType.Steam]: 'Steam game (A2S)'
+};
 
 export function gameLabel(game: GameServerType): string {
-    return GAME_META[game]?.label ?? game.replace(/_/g, ' ')
+	return GAME_LABELS[game] ?? game.replace(/_/g, ' ');
 }
 
-export function gameEmoji(game: GameServerType): string {
-    return GAME_META[game]?.emoji ?? '🎮'
+/** Artwork is downloaded once by the backend and served from its disk cache. */
+export function gameArtUrl(game: GameServerType, kind: 'poster' | 'hero'): string {
+	return `${API_BASE_URL}/api/games/${game}/${kind}`;
 }
 
 export function isMinecraft(game: GameServerType): boolean {
-    return game === GameServerType.Minecraft || game === GameServerType.MinecraftBedrock
+	return game === GameServerType.Minecraft || game === GameServerType.MinecraftBedrock;
 }

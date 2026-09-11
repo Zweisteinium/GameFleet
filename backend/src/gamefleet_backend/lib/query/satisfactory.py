@@ -24,7 +24,7 @@ class ServerGameState(TypedDict):
 
 
 def _query_sync(address: str, port: int) -> ServerGameState:
-    api = SatisfactoryAPI(host=address, port=port)
+    api = SatisfactoryAPI(host=address, port=port, skip_ssl_verification=True)  # dedicated servers use self-signed certs
     api.passwordless_login(MinimumPrivilegeLevel.CLIENT)
     return cast(ServerGameState, api.query_server_state().data["serverGameState"])
 

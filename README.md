@@ -23,6 +23,8 @@ Simple dashboard to keep track of your game servers. Shows who's online and if s
 | Valheim, Rust, 7 Days to Die, Palworld, Project Zomboid, Enshrouded, V Rising, Conan Exiles, DayZ, Counter-Strike, Team Fortress 2, Garry's Mod, Unturned | Steam A2S | Default query ports are prefilled per game; override the query port if your server uses a different one. |
 | Any other Steam game | Steam A2S | Pick "Steam game (A2S)" and enter the query port. |
 
+Game artwork (posters and hero banners) is downloaded once from the Steam CDN / Minecraft wiki and cached on disk by the backend (`ASSET_CACHE_DIR`, default `backend/data/assets`; a named volume in `docker-compose.yml`).
+
 The `port` of a server is always the port players connect to. The query port (and RCON port) only need to be set when they differ from the game's defaults.
 
 ## Setup

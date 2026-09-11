@@ -1019,4 +1019,24 @@ export class Api<
         ...params,
       }),
   };
+  game = {
+    /**
+     * @description Serve cached game artwork: `poster` (portrait) or `hero` (wide banner).
+     *
+     * @tags games
+     * @name GetGameAsset
+     * @summary Get Game Asset
+     * @request GET:/api/games/{game}/{kind}
+     */
+    getGameAsset: (
+      game: GameServerType,
+      kind: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HTTPValidationError>({
+        path: `/api/games/${game}/${kind}`,
+        method: "GET",
+        ...params,
+      }),
+  };
 }

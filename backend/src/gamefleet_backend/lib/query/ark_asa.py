@@ -97,7 +97,8 @@ def _info_from_eos(data: dict[str, Any]) -> ArkServerInfo:
         players_online=data.get("totalPlayers"),
         players_max=settings.get("maxPublicPlayers"),
         player_list=[p["name"] for p in data.get("publicPlayers", []) if p.get("name")] or None,
-        mods=[{"id": mod_id} for mod_id in mod_ids] or None,
+        # ASA mods are CurseForge projects; the project URL redirects to the mod page.
+        mods=[{"id": mod_id, "url": f"https://www.curseforge.com/projects/{mod_id}"} for mod_id in mod_ids] or None,
         game_mode=None if pve is None else ("PvE" if pve else "PvP"),
         day_time=attributes.get("DAYTIME_s"),
         official=attributes.get("OFFICIALSERVER_s") == "1",

@@ -11,6 +11,9 @@ services:
       DB_NAME: ${DB_NAME:-gamefleet}
       DB_USER: ${DB_USER:-gamefleet}
       DB_PASSWORD: ${DB_PASSWORD}
+      ASSET_CACHE_DIR: /app/data/assets
+    volumes:
+      - gamefleet-assets:/app/data/assets
 
   frontend:
     container_name: gamefleet-frontend
@@ -23,3 +26,6 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - backend
+
+volumes:
+  gamefleet-assets:

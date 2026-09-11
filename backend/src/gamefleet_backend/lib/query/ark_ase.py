@@ -26,9 +26,9 @@ async def get_ark_ase_server_info(address: str, query_port: int = 27015) -> ArkS
     server_name = clean_text(info.server_name) or ""
     version_match = VERSION_RE.search(server_name)
     mods = [
-        {"id": value.split(":")[0]}
+        {"id": mod_id, "url": f"https://steamcommunity.com/sharedfiles/filedetails/?id={mod_id}"}
         for key, value in sorted(rules.items())
-        if MOD_KEY_RE.match(key)
+        if MOD_KEY_RE.match(key) and (mod_id := value.split(":")[0])
     ]
 
     return ArkServerInfo(

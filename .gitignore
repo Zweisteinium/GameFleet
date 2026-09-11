@@ -65,3 +65,5 @@ desktop.ini
 *~
 tmp/
 temp/
+# Backend asset cache
+backend/data/

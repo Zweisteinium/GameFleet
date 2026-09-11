@@ -3,6 +3,25 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap"
+			rel="stylesheet"
+		/>
+		<script>
+			// Apply the saved theme before first paint to avoid a light flash in dark mode.
+			try {
+				// ?theme=light|dark overrides the saved preference (handy for sharing links and screenshots).
+				const param = new URLSearchParams(location.search).get('theme');
+				const stored =
+					param === 'light' || param === 'dark' ? param : localStorage.getItem('theme');
+				const dark = stored
+					? stored === 'dark'
+					: matchMedia('(prefers-color-scheme: dark)').matches;
+				document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+			} catch {}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
