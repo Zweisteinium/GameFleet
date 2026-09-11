@@ -1,9 +1,10 @@
 # Build stage
 FROM node:22-alpine AS build
 
-RUN npm install -g pnpm
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Use exactly the pnpm version pinned in package.json ("packageManager") so Docker and local installs agree.
+RUN corepack enable && corepack install
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm prepare
