@@ -29,7 +29,8 @@ if config.config_file_name is not None:
 target_metadata = SQLModel.metadata
 
 # Set the database URL from environment variable
-database_url = os.getenv("DATABASE_URL")
+# Use sync URL for migrations, fallback to async URL with psycopg2
+database_url = os.getenv("DATABASE_URL_SYNC") or os.getenv("DATABASE_URL", "").replace("+asyncpg", "+psycopg2")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 

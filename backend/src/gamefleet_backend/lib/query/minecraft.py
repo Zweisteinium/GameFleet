@@ -1,40 +1,51 @@
-from mcstatus import JavaServer
+from mcstatus import BedrockServer, JavaServer
 
 from gamefleet_backend.models.server_info import MinecraftServerInfo, ServerStatus
+from .common import QUERY_TIMEOUT, info_from_exception
 
 
-def get_minecraft_server_info(address: str, port: int = 25565) -> MinecraftServerInfo:
+async def get_minecraft_server_info(address: str, port: int = 25565) -> MinecraftServerInfo:
     try:
-        server = JavaServer.lookup(f"{address}:{port}")
-        status = server.status()
-        
-        return MinecraftServerInfo(
-            status=ServerStatus.ONLINE,
-            latency=status.latency,
-            version=f"{status.version.name} (protocol: {status.version.protocol})",
-            description=status.motd.to_minecraft(),
-            icon=status.icon,
-            mods=None,
-            game_mode=None,
-            map_name=None,
-            password_protected=None,
-            anti_cheat_enabled=None,
-            players_online=status.players.online,
-            players_max=status.players.max,
-            player_list=[player.name for player in status.players.sample] if status.players.sample else None,
-        )
-    except ConnectionRefusedError:
-        return MinecraftServerInfo(
-            status=ServerStatus.OFFLINE,
-            error_message="Server is offline or unreachable"
-        )
-    except TimeoutError:
-        return MinecraftServerInfo(
-            status=ServerStatus.OFFLINE,
-            error_message="Connection timed out"
-        )
-    except Exception as e:
-        return MinecraftServerInfo(
-            status=ServerStatus.UNKNOWN,
-            error_message=str(e)
-        )
+        server = await JavaServer.async_lookup(f"{address}:{port}", timeout=QUERY_TIMEOUT)
+        status = await server.async_status()
+    except Exception as exc:
+        return info_from_exception(MinecraftServerInfo, exc)
+
+    forge = status.forge_data
+    mods = [{"name": mod.name, "version": mod.marker} for mod in forge.mods] if forge and forge.mods else None
+
+    return MinecraftServerInfo(
+        status=ServerStatus.ONLINE,
+        latency=status.latency,
+        version=status.version.name,
+        description=status.motd.to_minecraft(),
+        icon=status.icon,
+        mods=mods,
+        players_online=status.players.online,
+        players_max=status.players.max,
+        player_list=[player.name for player in status.players.sample] if status.players.sample else None,
+        edition="java",
+        protocol=status.version.protocol,
+        enforces_secure_chat=status.enforces_secure_chat,
+    )
+
+
+async def get_minecraft_bedrock_server_info(address: str, port: int = 19132) -> MinecraftServerInfo:
+    try:
+        server = BedrockServer.lookup(f"{address}:{port}", timeout=QUERY_TIMEOUT)
+        status = await server.async_status()
+    except Exception as exc:
+        return info_from_exception(MinecraftServerInfo, exc)
+
+    return MinecraftServerInfo(
+        status=ServerStatus.ONLINE,
+        latency=status.latency,
+        version=status.version.name,
+        description=status.motd.to_minecraft(),
+        game_mode=status.gamemode,
+        map_name=status.map_name or None,
+        players_online=status.players.online,
+        players_max=status.players.max,
+        edition="bedrock",
+        protocol=status.version.protocol,
+    )

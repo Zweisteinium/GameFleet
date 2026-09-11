@@ -1,9 +1,12 @@
+import asyncio
+from typing import cast, TypedDict
+
 from satisfactory_api_client import SatisfactoryAPI
 from satisfactory_api_client.exceptions import APIError
 from satisfactory_api_client.data.minimum_privilege_level import MinimumPrivilegeLevel
-from typing import cast, TypedDict
 
 from gamefleet_backend.models.server_info import SatisfactoryServerInfo, ServerStatus
+from .common import info_from_exception
 
 
 class ServerGameState(TypedDict):
@@ -20,65 +23,30 @@ class ServerGameState(TypedDict):
     autoLoadSessionName: str
 
 
-class ServerStateResponse(TypedDict):
-    serverGameState: ServerGameState
+def _query_sync(address: str, port: int) -> ServerGameState:
+    api = SatisfactoryAPI(host=address, port=port)
+    api.passwordless_login(MinimumPrivilegeLevel.CLIENT)
+    return cast(ServerGameState, api.query_server_state().data["serverGameState"])
 
 
 async def get_satisfactory_server_info(address: str, port: int = 7777) -> SatisfactoryServerInfo:
     try:
-        api = SatisfactoryAPI(host='play.code-support.de', port=7777)
-        
-        # health = cast(dict, api.health_check())
-        # if not health['success'] or health['health'] != 'healthy':
-        #     return SatisfactoryServerInfo(
-        #         status=ServerStatus.OFFLINE,
-        #         error_message="Server is reachable but unhealthy"
-        #     )
+        # The client library is synchronous (requests), so keep it off the event loop.
+        state = await asyncio.wait_for(asyncio.to_thread(_query_sync, address, port), 15)
+    except APIError as exc:
+        return SatisfactoryServerInfo(status=ServerStatus.UNKNOWN, error_message=f"Server API error: {exc}")
+    except Exception as exc:
+        return info_from_exception(SatisfactoryServerInfo, exc)
 
-        api.passwordless_login(MinimumPrivilegeLevel.CLIENT)
-        server_data = cast(ServerStateResponse, api.query_server_state().data)
-        status = server_data['serverGameState']
-        
-        print(server_data)
-        
-        return SatisfactoryServerInfo(
-            status=ServerStatus.ONLINE,
-            latency=None,
-            players_online=status['numConnectedPlayers'],
-            players_max=status['playerLimit'],
-            player_list=None,
-            map_name=None,
-            game_mode=None,
-            description=None,
-            version=None,
-            password_protected=None,
-            anti_cheat_enabled=None,
-            # Satisfactory-specific fields
-            session_name=status['activeSessionName'],
-            tech_tier=status['techTier'],
-            game_phase=status['gamePhase'],
-            total_game_duration=status['totalGameDuration'],
-            avg_tick_rate=status['averageTickRate']
-        )
-    except ConnectionRefusedError:
-        return SatisfactoryServerInfo(
-            status=ServerStatus.OFFLINE,
-            error_message="Server is offline or unreachable"
-        )
-    except TimeoutError:
-        return SatisfactoryServerInfo(
-            status=ServerStatus.OFFLINE,
-            error_message="Connection timed out"
-        )
-    except APIError as e:
-        return SatisfactoryServerInfo(
-            status=ServerStatus.UNKNOWN,
-            error_message=f"Internal API error occurred: {e}"
-        )
-    except Exception as e:
-        return SatisfactoryServerInfo(
-            status=ServerStatus.UNKNOWN,
-            error_message=str(e)
-        )
-
-
+    return SatisfactoryServerInfo(
+        status=ServerStatus.ONLINE,
+        players_online=state["numConnectedPlayers"],
+        players_max=state["playerLimit"],
+        game_mode=state.get("gamePhase"),
+        session_name=state["activeSessionName"],
+        tech_tier=state["techTier"],
+        game_phase=state["gamePhase"],
+        total_game_duration=state["totalGameDuration"],
+        avg_tick_rate=state["averageTickRate"],
+        is_paused=state.get("isGamePaused"),
+    )

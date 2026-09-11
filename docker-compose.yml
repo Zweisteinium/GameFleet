@@ -1,5 +1,4 @@
 services:
-
   backend:
     container_name: gamefleet-backend
     network_mode: host

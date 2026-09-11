@@ -17,14 +17,89 @@ export enum ServerStatus {
   Unknown = "unknown",
 }
 
+/** QueryProtocol */
+export enum QueryProtocol {
+  MinecraftJava = "minecraft_java",
+  MinecraftBedrock = "minecraft_bedrock",
+  A2S = "a2s",
+  FactorioRcon = "factorio_rcon",
+  SatisfactoryApi = "satisfactory_api",
+  ArkEos = "ark_eos",
+}
+
 /** GameServerType */
 export enum GameServerType {
   Minecraft = "minecraft",
+  MinecraftBedrock = "minecraft_bedrock",
   Factorio = "factorio",
   Satisfactory = "satisfactory",
   ArkAse = "ark_ase",
   ArkAsa = "ark_asa",
   Valheim = "valheim",
+  Rust = "rust",
+  SevenDaysToDie = "seven_days_to_die",
+  Palworld = "palworld",
+  ProjectZomboid = "project_zomboid",
+  Enshrouded = "enshrouded",
+  VRising = "v_rising",
+  ConanExiles = "conan_exiles",
+  Dayz = "dayz",
+  CounterStrike = "counter_strike",
+  TeamFortress2 = "team_fortress_2",
+  GarrysMod = "garrys_mod",
+  Unturned = "unturned",
+  Steam = "steam",
+}
+
+/**
+ * ArkServerInfo
+ * ARK-specific server information (Survival Evolved and Survival Ascended).
+ */
+export interface ArkServerInfo {
+  /**
+   * Kind
+   * @default "ark"
+   */
+  kind?: "ark";
+  status: ServerStatus;
+  /** Latency */
+  latency?: number | null;
+  /** Version */
+  version?: string | null;
+  /** Server Name */
+  server_name?: string | null;
+  /** Description */
+  description?: string | null;
+  /** Icon */
+  icon?: string | null;
+  /** Mods */
+  mods?: Record<string, any>[] | null;
+  /** Game Mode */
+  game_mode?: string | null;
+  /** Map Name */
+  map_name?: string | null;
+  /** Password Protected */
+  password_protected?: boolean | null;
+  /** Anti Cheat Enabled */
+  anti_cheat_enabled?: boolean | null;
+  /** Players Online */
+  players_online?: number | null;
+  /** Players Max */
+  players_max?: number | null;
+  /** Player List */
+  player_list?: string[] | null;
+  /** Error Message */
+  error_message?: string | null;
+  /** Day Time */
+  day_time?: string | null;
+  /** Official */
+  official?: boolean | null;
+  /** Pve */
+  pve?: boolean | null;
+  /** Cluster Id */
+  cluster_id?: string | null;
+  /** Platform Type */
+  platform_type?: string | null;
 }
 
 /**
@@ -32,11 +107,18 @@ export enum GameServerType {
  * Base model for live server information that all game servers should provide.
  */
 export interface BaseServerInfo {
+  /**
+   * Kind
+   * @default "base"
+   */
+  kind?: "base";
   status: ServerStatus;
   /** Latency */
   latency?: number | null;
   /** Version */
   version?: string | null;
+  /** Server Name */
+  server_name?: string | null;
   /** Description */
   description?: string | null;
   /** Icon */
@@ -61,10 +143,99 @@ export interface BaseServerInfo {
   error_message?: string | null;
 }
 
-/** GameServer */
-export interface GameServer {
-  /** Id */
-  id?: string;
+/** ContainerInfo */
+export interface ContainerInfo {
+  /** Name */
+  name: string;
+  /** Image */
+  image: string;
+  /** State */
+  state: string;
+  /** Ports */
+  ports: PortBinding[];
+}
+
+/**
+ * FactorioServerInfo
+ * Factorio-specific server information (fetched via RCON).
+ */
+export interface FactorioServerInfo {
+  /**
+   * Kind
+   * @default "factorio"
+   */
+  kind?: "factorio";
+  status: ServerStatus;
+  /** Latency */
+  latency?: number | null;
+  /** Version */
+  version?: string | null;
+  /** Server Name */
+  server_name?: string | null;
+  /** Description */
+  description?: string | null;
+  /** Icon */
+  icon?: string | null;
+  /** Mods */
+  mods?: Record<string, any>[] | null;
+  /** Game Mode */
+  game_mode?: string | null;
+  /** Map Name */
+  map_name?: string | null;
+  /** Password Protected */
+  password_protected?: boolean | null;
+  /** Anti Cheat Enabled */
+  anti_cheat_enabled?: boolean | null;
+  /** Players Online */
+  players_online?: number | null;
+  /** Players Max */
+  players_max?: number | null;
+  /** Player List */
+  player_list?: string[] | null;
+  /** Error Message */
+  error_message?: string | null;
+  /** Tags */
+  tags?: string[] | null;
+  /** Public */
+  public?: boolean | null;
+  /** Require User Verification */
+  require_user_verification?: boolean | null;
+  /** Allow Commands */
+  allow_commands?: string | null;
+  /** Game Time */
+  game_time?: string | null;
+  /** Evolution */
+  evolution?: Record<string, number> | null;
+  /** Seed */
+  seed?: string | null;
+}
+
+/** GameServerCreate */
+export interface GameServerCreate {
+  /** Name */
+  name: string;
+  game: GameServerType;
+  /** Address */
+  address: string;
+  /**
+   * Port
+   * @min 1
+   * @max 65535
+   */
+  port: number;
+  /** Query Port */
+  query_port?: number | null;
+  /** Rcon Port */
+  rcon_port?: number | null;
+  /** Rcon Password */
+  rcon_password?: string | null;
+}
+
+/**
+ * GameServerPublic
+ * API representation of a server: everything except secrets.
+ */
+export interface GameServerPublic {
   game: GameServerType;
   /**
    * Name
@@ -82,17 +253,17 @@ export interface GameServer {
    * @max 65535
    */
   port: number;
-}
-
-/** GameServerCreate */
-export interface GameServerCreate {
-  /** Name */
-  name: string;
-  game: GameServerType;
-  /** Address */
-  address: string;
-  /** Port */
-  port: number;
+  /** Query Port */
+  query_port?: number | null;
+  /** Rcon Port */
+  rcon_port?: number | null;
+  /** Id */
+  id: string;
+  /**
+   * Has Rcon
+   * @default false
+   */
+  has_rcon?: boolean;
 }
 
 /** GameServerUpdate */
@@ -104,12 +275,201 @@ export interface GameServerUpdate {
   address?: string | null;
   /** Port */
   port?: number | null;
+  /** Query Port */
+  query_port?: number | null;
+  /** Rcon Port */
+  rcon_port?: number | null;
+  /** Rcon Password */
+  rcon_password?: string | null;
+}
+
+/** GameTypeInfo */
+export interface GameTypeInfo {
+  type: GameServerType;
+  /** Label */
+  label: string;
+  protocol: QueryProtocol;
+  /** Default Port */
+  default_port: number;
+  /** Default Query Port */
+  default_query_port: number | null;
+  /** Default Rcon Port */
+  default_rcon_port: number | null;
+  /** Needs Rcon */
+  needs_rcon: boolean;
 }
 
 /** HTTPValidationError */
 export interface HTTPValidationError {
   /** Detail */
   detail?: ValidationError[];
+}
+
+/**
+ * MinecraftServerInfo
+ * Minecraft-specific server information (Java and Bedrock editions).
+ */
+export interface MinecraftServerInfo {
+  /**
+   * Kind
+   * @default "minecraft"
+   */
+  kind?: "minecraft";
+  status: ServerStatus;
+  /** Latency */
+  latency?: number | null;
+  /** Version */
+  version?: string | null;
+  /** Server Name */
+  server_name?: string | null;
+  /** Description */
+  description?: string | null;
+  /** Icon */
+  icon?: string | null;
+  /** Mods */
+  mods?: Record<string, any>[] | null;
+  /** Game Mode */
+  game_mode?: string | null;
+  /** Map Name */
+  map_name?: string | null;
+  /** Password Protected */
+  password_protected?: boolean | null;
+  /** Anti Cheat Enabled */
+  anti_cheat_enabled?: boolean | null;
+  /** Players Online */
+  players_online?: number | null;
+  /** Players Max */
+  players_max?: number | null;
+  /** Player List */
+  player_list?: string[] | null;
+  /** Error Message */
+  error_message?: string | null;
+  /** Edition */
+  edition?: string | null;
+  /** Protocol */
+  protocol?: number | null;
+  /** Enforces Secure Chat */
+  enforces_secure_chat?: boolean | null;
+}
+
+/** PortBinding */
+export interface PortBinding {
+  /** Host Port */
+  host_port: number;
+  /** Protocol */
+  protocol: string;
+}
+
+/**
+ * SatisfactoryServerInfo
+ * Satisfactory-specific server information.
+ */
+export interface SatisfactoryServerInfo {
+  /**
+   * Kind
+   * @default "satisfactory"
+   */
+  kind?: "satisfactory";
+  status: ServerStatus;
+  /** Latency */
+  latency?: number | null;
+  /** Version */
+  version?: string | null;
+  /** Server Name */
+  server_name?: string | null;
+  /** Description */
+  description?: string | null;
+  /** Icon */
+  icon?: string | null;
+  /** Mods */
+  mods?: Record<string, any>[] | null;
+  /** Game Mode */
+  game_mode?: string | null;
+  /** Map Name */
+  map_name?: string | null;
+  /** Password Protected */
+  password_protected?: boolean | null;
+  /** Anti Cheat Enabled */
+  anti_cheat_enabled?: boolean | null;
+  /** Players Online */
+  players_online?: number | null;
+  /** Players Max */
+  players_max?: number | null;
+  /** Player List */
+  player_list?: string[] | null;
+  /** Error Message */
+  error_message?: string | null;
+  /** Session Name */
+  session_name?: string | null;
+  /** Tech Tier */
+  tech_tier?: number | null;
+  /** Game Phase */
+  game_phase?: string | null;
+  /** Total Game Duration */
+  total_game_duration?: number | null;
+  /** Avg Tick Rate */
+  avg_tick_rate?: number | null;
+  /** Is Paused */
+  is_paused?: boolean | null;
+}
+
+/**
+ * SteamServerInfo
+ * Generic Steam / Source engine (A2S) server information.
+ */
+export interface SteamServerInfo {
+  /**
+   * Kind
+   * @default "steam"
+   */
+  kind?: "steam";
+  status: ServerStatus;
+  /** Latency */
+  latency?: number | null;
+  /** Version */
+  version?: string | null;
+  /** Server Name */
+  server_name?: string | null;
+  /** Description */
+  description?: string | null;
+  /** Icon */
+  icon?: string | null;
+  /** Mods */
+  mods?: Record<string, any>[] | null;
+  /** Game Mode */
+  game_mode?: string | null;
+  /** Map Name */
+  map_name?: string | null;
+  /** Password Protected */
+  password_protected?: boolean | null;
+  /** Anti Cheat Enabled */
+  anti_cheat_enabled?: boolean | null;
+  /** Players Online */
+  players_online?: number | null;
+  /** Players Max */
+  players_max?: number | null;
+  /** Player List */
+  player_list?: string[] | null;
+  /** Error Message */
+  error_message?: string | null;
+  /** Game */
+  game?: string | null;
+  /** App Id */
+  app_id?: number | null;
+  /** Folder */
+  folder?: string | null;
+  /** Protocol */
+  protocol?: number | null;
+  /** Bot Count */
+  bot_count?: number | null;
+  /** Server Type */
+  server_type?: string | null;
+  /** Platform */
+  platform?: string | null;
+  /** Keywords */
+  keywords?: string | null;
+  /** Rules */
+  rules?: Record<string, string> | null;
 }
 
 /** ValidationError */
@@ -120,6 +480,10 @@ export interface ValidationError {
   msg: string;
   /** Error Type */
   type: string;
+  /** Input */
+  input?: any;
+  /** Context */
+  ctx?: object;
 }
 
 export type QueryParamsType = Record<string | number, any>;
@@ -395,7 +759,7 @@ export class Api<
    * @request GET:/api/servers
    */
   getServers = (params: RequestParams = {}) =>
-    this.request<GameServer[], any>({
+    this.request<GameServerPublic[], any>({
       path: `/api/servers`,
       method: "GET",
       format: "json",
@@ -403,7 +767,7 @@ export class Api<
     });
 
   /**
-   * No description
+   * @description Create a new game server.
    *
    * @tags servers
    * @name PostServer
@@ -411,7 +775,7 @@ export class Api<
    * @request POST:/api/servers
    */
   postServer = (data: GameServerCreate, params: RequestParams = {}) =>
-    this.request<GameServer, HTTPValidationError>({
+    this.request<GameServerPublic, HTTPValidationError>({
       path: `/api/servers`,
       method: "POST",
       body: data,
@@ -435,9 +799,103 @@ export class Api<
       ...params,
     });
 
+  supportedTypes = {
+    /**
+     * @description Get list of supported game server types.
+     *
+     * @tags servers
+     * @name GetSupportedServerTypes
+     * @summary Supported Types
+     * @request GET:/api/servers/supported_types
+     */
+    getSupportedServerTypes: (params: RequestParams = {}) =>
+      this.request<GameServerType[], any>({
+        path: `/api/servers/supported_types`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+  };
+  gameTypes = {
+    /**
+     * @description Get supported game types with display labels and default ports (for forms).
+     *
+     * @tags servers
+     * @name GetGameTypes
+     * @summary Game Types
+     * @request GET:/api/servers/game-types
+     */
+    getGameTypes: (params: RequestParams = {}) =>
+      this.request<GameTypeInfo[], any>({
+        path: `/api/servers/game-types`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+  };
+  liveInfo = {
+    /**
+     * @description Get live information for every server at once (queried concurrently).
+     *
+     * @tags servers
+     * @name GetAllServersLiveInfo
+     * @summary Get All Servers Live Info
+     * @request GET:/api/servers/live-info
+     */
+    getAllServersLiveInfo: (params: RequestParams = {}) =>
+      this.request<
+        Record<
+          string,
+          | ({
+              kind: "base";
+            } & BaseServerInfo)
+          | ({
+              kind: "steam";
+            } & SteamServerInfo)
+          | ({
+              kind: "minecraft";
+            } & MinecraftServerInfo)
+          | ({
+              kind: "factorio";
+            } & FactorioServerInfo)
+          | ({
+              kind: "satisfactory";
+            } & SatisfactoryServerInfo)
+          | ({
+              kind: "ark";
+            } & ArkServerInfo)
+        >,
+        any
+      >({
+        path: `/api/servers/live-info`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+  };
+  byType = {
+    /**
+     * @description Get all servers of a specific game type.
+     *
+     * @tags servers
+     * @name GetServersByType
+     * @summary Get Servers By Type
+     * @request GET:/api/servers/by-type/{server_type}
+     */
+    getServersByType: (
+      serverType: GameServerType,
+      params: RequestParams = {},
+    ) =>
+      this.request<GameServerPublic[], HTTPValidationError>({
+        path: `/api/servers/by-type/${serverType}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+  };
   serverId = {
     /**
-     * No description
+     * @description Get a specific game server by ID.
      *
      * @tags servers
      * @name GetServerById
@@ -445,7 +903,7 @@ export class Api<
      * @request GET:/api/servers/{server_id}
      */
     getServerById: (serverId: string, params: RequestParams = {}) =>
-      this.request<GameServer, HTTPValidationError>({
+      this.request<GameServerPublic, HTTPValidationError>({
         path: `/api/servers/${serverId}`,
         method: "GET",
         format: "json",
@@ -453,7 +911,7 @@ export class Api<
       }),
 
     /**
-     * No description
+     * @description Update an existing game server (only fields that are sent are changed).
      *
      * @tags servers
      * @name UpdateServer
@@ -465,7 +923,7 @@ export class Api<
       data: GameServerUpdate,
       params: RequestParams = {},
     ) =>
-      this.request<GameServer, HTTPValidationError>({
+      this.request<GameServerPublic, HTTPValidationError>({
         path: `/api/servers/${serverId}`,
         method: "PUT",
         body: data,
@@ -499,45 +957,28 @@ export class Api<
      * @request GET:/api/servers/{server_id}/live-info
      */
     getServerLiveInfoById: (serverId: string, params: RequestParams = {}) =>
-      this.request<BaseServerInfo, HTTPValidationError>({
+      this.request<
+        | ({
+            kind: "base";
+          } & BaseServerInfo)
+        | ({
+            kind: "steam";
+          } & SteamServerInfo)
+        | ({
+            kind: "minecraft";
+          } & MinecraftServerInfo)
+        | ({
+            kind: "factorio";
+          } & FactorioServerInfo)
+        | ({
+            kind: "satisfactory";
+          } & SatisfactoryServerInfo)
+        | ({
+            kind: "ark";
+          } & ArkServerInfo),
+        HTTPValidationError
+      >({
         path: `/api/servers/${serverId}/live-info`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-  };
-  byType = {
-    /**
-     * @description Get all servers of a specific game type.
-     *
-     * @tags servers
-     * @name GetServersByType
-     * @summary Get Servers By Type
-     * @request GET:/api/servers/by-type/{server_type}
-     */
-    getServersByType: (
-      serverType: GameServerType,
-      params: RequestParams = {},
-    ) =>
-      this.request<GameServer[], HTTPValidationError>({
-        path: `/api/servers/by-type/${serverType}`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-  };
-  supportedTypes = {
-    /**
-     * @description Get list of supported game server types.
-     *
-     * @tags servers
-     * @name GetSupportedServerTypes
-     * @summary Supported Types
-     * @request GET:/api/servers/supported_types
-     */
-    getSupportedServerTypes: (params: RequestParams = {}) =>
-      this.request<GameServerType[], any>({
-        path: `/api/servers/supported_types`,
         method: "GET",
         format: "json",
         ...params,
@@ -545,37 +986,35 @@ export class Api<
   };
   containers = {
     /**
-     * No description
+     * @description List every container on the host regardless of state.
      *
      * @tags docker
-     * @name ListContainersApiDockerContainersGet
-     * @summary List Containers
+     * @name ListAllContainersApiDockerContainersGet
+     * @summary List All Containers
      * @request GET:/api/docker/containers
      */
-    listContainersApiDockerContainersGet: (params: RequestParams = {}) =>
-      this.request<any, any>({
+    listAllContainersApiDockerContainersGet: (params: RequestParams = {}) =>
+      this.request<ContainerInfo[], any>({
         path: `/api/docker/containers`,
         method: "GET",
         format: "json",
         ...params,
       }),
-  };
-  start = {
+
     /**
-     * No description
+     * @description List only containers labelled gamefleet.managed=true.
      *
      * @tags docker
-     * @name StartContainerApiDockerStartContainerIdPost
-     * @summary Start Container
-     * @request POST:/api/docker/start/{container_id}
+     * @name ListManagedContainersApiDockerContainersManagedGet
+     * @summary List Managed Containers
+     * @request GET:/api/docker/containers/managed
      */
-    startContainerApiDockerStartContainerIdPost: (
-      containerId: string,
+    listManagedContainersApiDockerContainersManagedGet: (
       params: RequestParams = {},
     ) =>
-      this.request<any, HTTPValidationError>({
-        path: `/api/docker/start/${containerId}`,
-        method: "POST",
+      this.request<ContainerInfo[], any>({
+        path: `/api/docker/containers/managed`,
+        method: "GET",
         format: "json",
         ...params,
       }),

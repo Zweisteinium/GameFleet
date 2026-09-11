@@ -1,19 +1,26 @@
-# from fastapi import APIRouter
-# import docker
+from fastapi import APIRouter, HTTPException
+import docker.errors
 
-# router = APIRouter()
-# client = docker.from_env()
+from gamefleet_backend.models.container_info import ContainerInfo
+from gamefleet_backend.services.docker_service import DockerService
 
-# @router.get("/containers")
-# def list_containers():
-#     containers = client.containers.list(all=True)
-#     return [
-#         {"id": c.id, "name": c.name, "status": c.status, "image": c.image.tags}
-#         for c in containers
-#     ]
+router = APIRouter()
 
-# @router.post("/start/{container_id}")
-# def start_container(container_id: str):
-#     container = client.containers.get(container_id)
-#     container.start()
-#     return {"status": "started", "id": container_id}
+
+def _get_service() -> DockerService:
+    try:
+        return DockerService()
+    except docker.errors.DockerException as e:
+        raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {e}")
+
+
+@router.get("/containers", response_model=list[ContainerInfo])
+def list_all_containers():
+    """List every container on the host regardless of state."""
+    return _get_service().get_all_containers()
+
+
+@router.get("/containers/managed", response_model=list[ContainerInfo])
+def list_managed_containers():
+    """List only containers labelled gamefleet.managed=true."""
+    return _get_service().get_managed_containers()

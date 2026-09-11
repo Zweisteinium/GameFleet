@@ -10,10 +10,13 @@ dependencies = [
     "docker>=7.1.0",
     "fastapi>=0.118.0",
     "mcstatus>=12.0.5",
-    "satisfactory-api-client @ git+https://github.com/Programmer-Timmy/satisfactory-dedicated-server-api-SDK",
+    "psycopg2-binary>=2.9.10",
     "python-dotenv>=1.0.1,<1.1.0",
     "sqlmodel>=0.0.25",
     "uvicorn>=0.37.0",
+    "python-a2s>=1.4.1",
+    "satisfactory-api-client>=0.1.0",
+    "aiohttp>=3.14.3",
 ]
 
 [build-system]

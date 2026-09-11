@@ -10,6 +10,21 @@ Simple dashboard to keep track of your game servers. Shows who's online and if s
 - Web interface that updates automatically
 - Easy to run with Docker
 
+## Supported games
+
+| Game | How it is queried | Notes |
+|------|-------------------|-------|
+| Minecraft (Java) | Server list ping | MOTD, icon, version, players, Forge mods |
+| Minecraft (Bedrock) | Raknet ping | MOTD, version, players, game mode, map |
+| Factorio | RCON | Factorio has no public query protocol. Start the server with `--rcon-port` and `--rcon-password` and enter them when adding the server. |
+| Satisfactory | Dedicated server HTTPS API | Session, tech tier, game phase, tick rate |
+| ARK: Survival Evolved | Steam A2S (query port, default 27015) | Day, mods, PvE/PvP, cluster, BattlEye |
+| ARK: Survival Ascended | Epic Online Services | Official and Nitrado/public servers are found automatically via ARK's server lists. Private servers need RCON (`ListPlayers`). |
+| Valheim, Rust, 7 Days to Die, Palworld, Project Zomboid, Enshrouded, V Rising, Conan Exiles, DayZ, Counter-Strike, Team Fortress 2, Garry's Mod, Unturned | Steam A2S | Default query ports are prefilled per game; override the query port if your server uses a different one. |
+| Any other Steam game | Steam A2S | Pick "Steam game (A2S)" and enter the query port. |
+
+The `port` of a server is always the port players connect to. The query port (and RCON port) only need to be set when they differ from the game's defaults.
+
 ## Setup
 
 You'll need Docker installed.
