@@ -9,7 +9,7 @@ FRONTEND_IMAGE = $(DOCKER_REPO)/gamefleet-frontend
 COMPOSE = DOCKER_REPO=$(DOCKER_REPO) VERSION=$(VERSION) docker compose
 
 .DEFAULT_GOAL := help
-.PHONY: help install backend frontend db check swagger up down restart logs ps shell build release clean
+.PHONY: help install backend frontend db check swagger hash up down restart logs ps shell build release clean
 
 ##@ Native development
 
@@ -34,6 +34,9 @@ check: ## Type-check and lint the frontend, import-check the backend
 
 swagger: ## Regenerate frontend/src/lib/api from the running backend's OpenAPI schema
 	cd frontend && pnpm swagger
+
+hash: ## Print an scrypt hash for a GAMEFLEET_USERS password (prompts for it)
+	cd backend && uv run python -m gamefleet_backend.auth hash
 
 ##@ Docker (docker-compose.yml, configured through .env)
 

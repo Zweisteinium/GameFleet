@@ -13,6 +13,9 @@ services:
       DB_USER: ${DB_USER:-gamefleet}
       DB_PASSWORD: ${DB_PASSWORD}
       ASSET_CACHE_DIR: /app/data/assets
+      # Login: "name:password,name2:password2" (plain or scrypt hashes from `make hash`; escape $ as $$ in .env).
+      GAMEFLEET_USERS: ${GAMEFLEET_USERS:-}
+      GAMEFLEET_SECRET: ${GAMEFLEET_SECRET:-}
     volumes:
       - gamefleet-assets:/app/data/assets
 

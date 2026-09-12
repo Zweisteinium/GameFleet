@@ -305,6 +305,24 @@ export interface HTTPValidationError {
   detail?: ValidationError[];
 }
 
+/** LoginRequest */
+export interface LoginRequest {
+  /** Username */
+  username: string;
+  /** Password */
+  password: string;
+}
+
+/** LoginResponse */
+export interface LoginResponse {
+  /** Token */
+  token: string;
+  /** Username */
+  username: string;
+  /** Expires At */
+  expires_at: number;
+}
+
 /**
  * MinecraftServerInfo
  * Minecraft-specific server information (Java and Bedrock editions).
@@ -411,6 +429,14 @@ export interface SatisfactoryServerInfo {
   avg_tick_rate?: number | null;
   /** Is Paused */
   is_paused?: boolean | null;
+}
+
+/** SessionInfo */
+export interface SessionInfo {
+  /** Auth Enabled */
+  auth_enabled: boolean;
+  /** Username */
+  username?: string | null;
 }
 
 /**
@@ -743,7 +769,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
 /**
  * @title Game Server Dashboard API
- * @version 0.1.0
+ * @version 0.6.0
  *
  * API for managing and monitoring game servers
  */
@@ -757,11 +783,13 @@ export class Api<
    * @name GetServers
    * @summary Get Servers
    * @request GET:/api/servers
+   * @secure
    */
   getServers = (params: RequestParams = {}) =>
     this.request<GameServerPublic[], any>({
       path: `/api/servers`,
       method: "GET",
+      secure: true,
       format: "json",
       ...params,
     });
@@ -773,12 +801,14 @@ export class Api<
    * @name PostServer
    * @summary Post Server
    * @request POST:/api/servers
+   * @secure
    */
   postServer = (data: GameServerCreate, params: RequestParams = {}) =>
     this.request<GameServerPublic, HTTPValidationError>({
       path: `/api/servers`,
       method: "POST",
       body: data,
+      secure: true,
       type: ContentType.Json,
       format: "json",
       ...params,
@@ -799,6 +829,44 @@ export class Api<
       ...params,
     });
 
+  login = {
+    /**
+     * @description Exchange username and password for a bearer token.
+     *
+     * @tags auth
+     * @name Login
+     * @summary Login
+     * @request POST:/api/auth/login
+     */
+    login: (data: LoginRequest, params: RequestParams = {}) =>
+      this.request<LoginResponse, HTTPValidationError>({
+        path: `/api/auth/login`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  me = {
+    /**
+     * @description Whether login is required and who the caller is. Returns 401 for a missing or expired token.
+     *
+     * @tags auth
+     * @name GetSession
+     * @summary Me
+     * @request GET:/api/auth/me
+     * @secure
+     */
+    getSession: (params: RequestParams = {}) =>
+      this.request<SessionInfo, any>({
+        path: `/api/auth/me`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
   supportedTypes = {
     /**
      * @description Get list of supported game server types.
@@ -807,11 +875,13 @@ export class Api<
      * @name GetSupportedServerTypes
      * @summary Supported Types
      * @request GET:/api/servers/supported_types
+     * @secure
      */
     getSupportedServerTypes: (params: RequestParams = {}) =>
       this.request<GameServerType[], any>({
         path: `/api/servers/supported_types`,
         method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -824,11 +894,13 @@ export class Api<
      * @name GetGameTypes
      * @summary Game Types
      * @request GET:/api/servers/game-types
+     * @secure
      */
     getGameTypes: (params: RequestParams = {}) =>
       this.request<GameTypeInfo[], any>({
         path: `/api/servers/game-types`,
         method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -841,6 +913,7 @@ export class Api<
      * @name GetAllServersLiveInfo
      * @summary Get All Servers Live Info
      * @request GET:/api/servers/live-info
+     * @secure
      */
     getAllServersLiveInfo: (params: RequestParams = {}) =>
       this.request<
@@ -869,6 +942,7 @@ export class Api<
       >({
         path: `/api/servers/live-info`,
         method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -881,6 +955,7 @@ export class Api<
      * @name GetServersByType
      * @summary Get Servers By Type
      * @request GET:/api/servers/by-type/{server_type}
+     * @secure
      */
     getServersByType: (
       serverType: GameServerType,
@@ -889,6 +964,7 @@ export class Api<
       this.request<GameServerPublic[], HTTPValidationError>({
         path: `/api/servers/by-type/${serverType}`,
         method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -901,11 +977,13 @@ export class Api<
      * @name GetServerById
      * @summary Get Server
      * @request GET:/api/servers/{server_id}
+     * @secure
      */
     getServerById: (serverId: string, params: RequestParams = {}) =>
       this.request<GameServerPublic, HTTPValidationError>({
         path: `/api/servers/${serverId}`,
         method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -917,6 +995,7 @@ export class Api<
      * @name UpdateServer
      * @summary Update Server
      * @request PUT:/api/servers/{server_id}
+     * @secure
      */
     updateServer: (
       serverId: string,
@@ -927,6 +1006,7 @@ export class Api<
         path: `/api/servers/${serverId}`,
         method: "PUT",
         body: data,
+        secure: true,
         type: ContentType.Json,
         format: "json",
         ...params,
@@ -939,11 +1019,13 @@ export class Api<
      * @name DeleteServer
      * @summary Delete Server
      * @request DELETE:/api/servers/{server_id}
+     * @secure
      */
     deleteServer: (serverId: string, params: RequestParams = {}) =>
       this.request<any, HTTPValidationError>({
         path: `/api/servers/${serverId}`,
         method: "DELETE",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -955,6 +1037,7 @@ export class Api<
      * @name GetServerLiveInfoById
      * @summary Get Server Live Info By Id
      * @request GET:/api/servers/{server_id}/live-info
+     * @secure
      */
     getServerLiveInfoById: (serverId: string, params: RequestParams = {}) =>
       this.request<
@@ -980,6 +1063,7 @@ export class Api<
       >({
         path: `/api/servers/${serverId}/live-info`,
         method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -992,11 +1076,13 @@ export class Api<
      * @name ListAllContainersApiDockerContainersGet
      * @summary List All Containers
      * @request GET:/api/docker/containers
+     * @secure
      */
     listAllContainersApiDockerContainersGet: (params: RequestParams = {}) =>
       this.request<ContainerInfo[], any>({
         path: `/api/docker/containers`,
         method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -1008,6 +1094,7 @@ export class Api<
      * @name ListManagedContainersApiDockerContainersManagedGet
      * @summary List Managed Containers
      * @request GET:/api/docker/containers/managed
+     * @secure
      */
     listManagedContainersApiDockerContainersManagedGet: (
       params: RequestParams = {},
@@ -1015,6 +1102,7 @@ export class Api<
       this.request<ContainerInfo[], any>({
         path: `/api/docker/containers/managed`,
         method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),

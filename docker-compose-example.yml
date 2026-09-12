@@ -1,5 +1,5 @@
 # Runs GameFleet from the prebuilt Docker Hub images together with its own PostgreSQL.
-# Copy to docker-compose.yml (or use `docker compose -f docker-compose-example.yml up -d`) and set DB_PASSWORD in .env.
+# Copy to docker-compose.yml (or use `docker compose -f docker-compose-example.yml up -d`) and set DB_PASSWORD and GAMEFLEET_USERS in .env.
 services:
   postgres:
     image: postgres:16
@@ -23,6 +23,8 @@ services:
       DB_USER: ${DB_USER:-gamefleet}
       DB_PASSWORD: ${DB_PASSWORD}
       ASSET_CACHE_DIR: /app/data/assets
+      GAMEFLEET_USERS: ${GAMEFLEET_USERS:-}
+      GAMEFLEET_SECRET: ${GAMEFLEET_SECRET:-}
     volumes:
       - gamefleet-assets:/app/data/assets
     ports:
