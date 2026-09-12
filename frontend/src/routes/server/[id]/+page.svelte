@@ -6,6 +6,7 @@
 	import { api } from '$lib/api/ApiService';
 	import type { GameServerPublic } from '$lib/api/Api';
 	import { gameArtUrl, gameLabel, isMinecraft } from '$lib/games';
+	import { capabilities, overviewTiles, playersEmptyMessage } from '$lib/gameinfo';
 	import {
 		live,
 		restoreLive,
@@ -19,6 +20,7 @@
 	import MinecraftMOTD from '$lib/components/MinecraftMOTD.svelte';
 	import GameDetails from '$lib/components/GameDetails.svelte';
 	import ServerForm from '$lib/components/ServerForm.svelte';
+	import ServerProperties from '$lib/components/ServerProperties.svelte';
 	import HostPanel from '$lib/components/HostPanel.svelte';
 	import GameArt from '$lib/components/GameArt.svelte';
 	import PlayersBar from '$lib/components/PlayersBar.svelte';
@@ -37,9 +39,11 @@
 	const serverId = page.params.id ?? '';
 	// Live data comes from the shared cache: instant when arriving from the dashboard, refreshed in the background.
 	const liveInfo = $derived(live.info[serverId] ?? null);
-	const refreshing = $derived(live.pending[serverId] ?? false);
 	const hostStats = $derived(live.host[serverId]);
+	const refreshing = $derived(live.pending[serverId] ?? false);
 	const isLocal = $derived(server?.source === 'docker');
+	const tiles = $derived(liveInfo && server ? overviewTiles(liveInfo, server.game) : []);
+	const caps = $derived(liveInfo ? capabilities(liveInfo) : null);
 
 	async function fetchServerData() {
 		if (!serverId) {
@@ -98,22 +102,6 @@
 	});
 
 	onDestroy(() => clearInterval(refreshInterval));
-
-	const security = $derived.by(() => {
-		if (!liveInfo) return [];
-		const items: { icon: string; text: string }[] = [];
-		if (liveInfo.password_protected != null)
-			items.push({
-				icon: liveInfo.password_protected ? 'lock' : 'lock-open',
-				text: liveInfo.password_protected ? 'Password' : 'Open'
-			});
-		if (liveInfo.anti_cheat_enabled != null)
-			items.push({
-				icon: 'shield',
-				text: liveInfo.anti_cheat_enabled ? 'Anti-cheat' : 'No anti-cheat'
-			});
-		return items;
-	});
 </script>
 
 <svelte:head>
@@ -148,7 +136,7 @@
 				<img
 					src={gameArtUrl(server.game, 'hero')}
 					alt=""
-					class="h-full w-full object-cover opacity-70 blur-[2px] scale-105"
+					class="h-full w-full scale-105 object-cover opacity-70 blur-[2px]"
 					onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
 				/>
 				<div
@@ -179,11 +167,7 @@
 							{/if}
 						</p>
 						<h1 class="font-display mt-1 text-3xl font-semibold tracking-tight">{server.name}</h1>
-						{#if isLocal}
-			<HostPanel {server} stats={hostStats} onPower={power} />
-		{/if}
-
-		{#if !liveInfo}
+						{#if !liveInfo}
 							<Skeleton class="mt-2 h-4 w-56" />
 						{:else if liveInfo.server_name && liveInfo.server_name !== server.name}
 							<p class="text-ink-2 mt-1 truncate text-sm">“{liveInfo.server_name}”</p>
@@ -198,10 +182,12 @@
 							{#if server.has_rcon}<span class="meta"
 									><Icon name="key" size={14} />RCON {server.rcon_port ?? 'default'}</span
 								>{/if}
-							{#each security as item (item.text)}
-								<span class="meta"><Icon name={item.icon} size={14} />{item.text}</span>
-							{/each}
 						</div>
+						{#if liveInfo}
+							<div class="mt-3">
+								<ServerProperties info={liveInfo} />
+							</div>
+						{/if}
 					</div>
 				</div>
 
@@ -236,6 +222,10 @@
 			>
 				<Icon name="alert" size={16} />{error}
 			</p>
+		{/if}
+
+		{#if isLocal}
+			<HostPanel {server} stats={hostStats} onPower={power} />
 		{/if}
 
 		{#if !liveInfo}
@@ -275,9 +265,9 @@
 				</div>
 			{/if}
 
-			<!-- Stats -->
+			<!-- Overview: player count plus three headline tiles chosen per game -->
 			<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-				<div class="card col-span-2 flex items-center gap-3 p-4 md:col-span-1">
+				<div class="card flex items-center gap-3 p-4">
 					<span
 						class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent"
 						><Icon name="users" size={18} /></span
@@ -291,25 +281,15 @@
 						{/if}
 					</div>
 				</div>
-				{#if liveInfo.latency != null}
+				{#each tiles as tile (tile.key)}
 					<StatCard
-						icon="zap"
-						title="Latency"
-						value="{Math.trunc(liveInfo.latency)} ms"
-						tone="warning"
+						icon={tile.icon}
+						title={tile.title}
+						value={tile.value ?? '—'}
+						subtitle={tile.value ? tile.subtitle : undefined}
+						tone={tile.value ? (tile.tone ?? 'neutral') : 'neutral'}
 					/>
-				{/if}
-				{#if liveInfo.version}
-					<StatCard icon="tag" title="Version" value={liveInfo.version} />
-				{/if}
-				{#if liveInfo.map_name || liveInfo.game_mode}
-					<StatCard
-						icon="map"
-						title={liveInfo.map_name ? 'Map' : 'Mode'}
-						value={liveInfo.map_name ?? liveInfo.game_mode ?? ''}
-						tone="success"
-					/>
-				{/if}
+				{/each}
 			</div>
 
 			<div class="grid gap-5 lg:grid-cols-5">
@@ -338,7 +318,11 @@
 							</div>
 						{/if}
 						{#if !liveInfo.description && !(liveInfo.game_mode && liveInfo.map_name)}
-							<p class="text-ink-3 text-sm">This server does not publish a description.</p>
+							<p class="text-ink-3 text-sm">
+								{caps?.description
+									? 'This server does not publish a description.'
+									: 'This game does not publish a description.'}
+							</p>
 						{/if}
 					</dl>
 				</section>
@@ -366,11 +350,7 @@
 							{/each}
 						</ul>
 					{:else}
-						<p class="text-ink-3 py-6 text-center text-sm">
-							{liveInfo.players_online
-								? 'This server does not publish player names.'
-								: 'Nobody is online right now.'}
-						</p>
+						<p class="text-ink-3 py-6 text-center text-sm">{playersEmptyMessage(liveInfo)}</p>
 					{/if}
 				</section>
 			</div>
