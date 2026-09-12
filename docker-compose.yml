@@ -16,8 +16,13 @@ services:
       # Login: "name:password,name2:password2" (plain or scrypt hashes from `make hash`; escape $ as $$ in .env).
       GAMEFLEET_USERS: ${GAMEFLEET_USERS:-}
       GAMEFLEET_SECRET: ${GAMEFLEET_SECRET:-}
+      # Docker discovery of game servers on this host (needs the socket mount below).
+      DOCKER_AUTO_IMPORT: ${DOCKER_AUTO_IMPORT:-true}
     volumes:
       - gamefleet-assets:/app/data/assets
+      # Lets GameFleet find, control and measure game-server containers. The socket is root-equivalent
+      # on the host; remove this line if you only monitor remote servers.
+      - /var/run/docker.sock:/var/run/docker.sock
 
   frontend:
     container_name: gamefleet-frontend

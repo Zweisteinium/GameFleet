@@ -17,6 +17,8 @@ A small, self-hosted dashboard for your game servers. It shows which servers are
 - One dashboard for all your servers, with search, per-game filters, status filter, sorting and grid/list views
 - Live status, player counts and player names (where the game publishes them), refreshed every 30 seconds
 - Per-game details: Minecraft MOTD and server icon, ARK day/cluster/mods, Factorio evolution and tags, raw A2S rules for Steam games
+- Game servers running in Docker on the same host are found automatically, can be started, stopped and restarted from the dashboard, and show CPU, memory, data and world size
+- Login with users from an environment variable
 - Real game artwork, downloaded once and cached locally by the backend
 - Light and dark theme
 - FastAPI backend with OpenAPI docs, SvelteKit frontend, PostgreSQL storage
@@ -37,6 +39,18 @@ A small, self-hosted dashboard for your game servers. It shows which servers are
 
 The **port** of a server is always the port players connect to. The query port and RCON port only need to be set when they differ from the game's defaults, which the add-server form shows.
 
+## Servers in Docker on the same host
+
+With the Docker socket mounted into the backend (the compose files do this), GameFleet looks at every container on the host and recognises game servers in three ways, most reliable first:
+
+1. **Labels** on the container are authoritative and always imported: `gamefleet.game=factorio` is enough; `gamefleet.name`, `gamefleet.port`, `gamefleet.query_port`, `gamefleet.rcon_port`, `gamefleet.rcon_password` / `gamefleet.rcon_password_env` / `gamefleet.rcon_password_file`, `gamefleet.data_path` and `gamefleet.world_path` refine it, `gamefleet.ignore=true` hides a container.
+2. **Known images** (`itzg/minecraft-server`, `factoriotools/factorio`, `lloesche/valheim-server`, `thijsvanloef/palworld-server-docker`, `wolveix/satisfactory-server`, `cm2network/*` and more, see `models/container_catalog.py`) are imported automatically when `DOCKER_AUTO_IMPORT` is on. The catalog also knows where each image keeps its data and how it is given its RCON password, so a Factorio or Minecraft container needs no configuration at all.
+3. **Names and ports** only produce a suggestion: a container called `my-valheim` or one that exposes 34197/udp shows up in the "Containers on this host" panel with a game dropdown and an Import button.
+
+Ports are translated to what is reachable from the host (published port, or the container's own address when nothing is published), the container name is the link, so `docker compose up` recreating a container keeps it attached. Imported servers get a **Host container** panel with start/stop/restart, CPU and memory (one Docker stats sample per refresh, cached for 10 s), and the size of the data and world directories (`du` inside the container, cached for 5 min). Removing an imported server hides the container from discovery; it can be shown again from the panel.
+
+Backups and rollback are planned on top of this: every imported server already records its persistent paths and volumes, and stop/start are the primitives a restore needs.
+
 ## Quick start (Docker)
 
 You need Docker and a PostgreSQL database. The compose file runs the backend with host networking, so any Postgres reachable from the host works. To run one alongside:
@@ -56,7 +70,7 @@ cp .env.example .env      # set DB_PASSWORD (and anything else you want to chang
 make up                   # builds and starts backend + frontend in the background
 ```
 
-- Dashboard: http://localhost:3000
+- Dashboard: http://localhost:3000 (log in with a user from `GAMEFLEET_USERS`)
 - API docs: http://localhost:8000/swagger
 
 The database schema is created and upgraded automatically when the backend starts. Game artwork is cached in the `gamefleet-assets` volume.
@@ -74,9 +88,14 @@ Prebuilt images are published as `h3xachad/gamefleet-backend` and `h3xachad/game
 | `FRONTEND_PORT` | `3000` | Published frontend port |
 | `FRONTEND_TARGET` | `node-server` | `node-server` or `nginx-server` image variant |
 | `ASSET_CACHE_DIR` | `data/assets` | Where the backend stores downloaded game artwork |
+| `GAMEFLEET_USERS` | – | Login users, `name:password,name2:password2`. Passwords in plain text or scrypt hashes from `make hash` (`$` becomes `$$` in `.env`). Empty disables login. |
+| `GAMEFLEET_SECRET` | random per start | Signs login tokens (30 days, `GAMEFLEET_SESSION_HOURS`); set it so logins survive restarts |
+| `DOCKER_AUTO_IMPORT` | `true` | Import containers with known game-server images automatically |
+| `DOCKER_SERVER_ADDRESS` | `127.0.0.1` | Address imported containers are queried at (the LAN IP or `host.docker.internal` when the backend is not on the host network) |
+| `DOCKER_DISCOVERY_INTERVAL` | `60` | Seconds between background discovery runs, `0` disables |
 | `UV_LINK_MODE` | – | Set to `copy` if your uv cache and project live on different filesystems |
 
-`backend/.env` (used when running the backend natively): `DATABASE_URL` (asyncpg URL) and `DATABASE_URL_SYNC` (psycopg2 URL, only for Alembic).
+`backend/.env` (used when running the backend natively): `DATABASE_URL` (asyncpg URL), `DATABASE_URL_SYNC` (psycopg2 URL, only for Alembic) and optionally the `GAMEFLEET_*` / `DOCKER_*` variables above.
 
 ## Development
 
@@ -89,7 +108,7 @@ make backend        # API with auto-reload on http://localhost:8000
 make frontend       # SvelteKit dev server on http://localhost:3000
 ```
 
-`make check` runs svelte-check and ESLint on the frontend and import-checks the backend. `make swagger` regenerates `frontend/src/lib/api/Api.ts` from the running backend's OpenAPI schema; run it whenever you change API models.
+`make check` runs svelte-check and ESLint on the frontend and import-checks the backend. `make swagger` regenerates `frontend/src/lib/api/Api.ts` from the running backend's OpenAPI schema; run it whenever you change API models. `GAMEFLEET_API_URL` at build time points the frontend at another backend (`GAMEFLEET_API_URL=http://localhost:8010 pnpm dev`).
 
 Append `?theme=light` or `?theme=dark` to any URL to force a theme (useful for sharing links).
 
@@ -104,15 +123,16 @@ Games that speak A2S need no query code. Anything else gets a module in `backend
 ### Project layout
 
 ```
-backend/   FastAPI + SQLModel. api/ (routes), services/ (live info, docker, assets),
-           lib/query/ (one module per protocol), models/ (API models + game catalog), db/
+backend/   FastAPI + SQLModel. api/ (routes), auth.py (users, tokens), services/ (live info, docker,
+           discovery, assets), lib/query/ (one module per protocol), models/ (API models, game and
+           container catalogs), db/
 frontend/  SvelteKit (static adapter) + Tailwind v4. lib/components/, routes/main, routes/server/[id]
 docs/      screenshots
 ```
 
 ## Make targets
 
-`make help` lists everything. Native development: `install`, `db`, `backend`, `frontend`, `check`, `swagger`. Docker: `up`, `down`, `restart`, `logs` (`S=backend` for one service), `ps`, `shell`, `build`, `release` (build, tag and push both images to `DOCKER_REPO`, default `h3xachad`), `clean`.
+`make help` lists everything. Native development: `install`, `db`, `backend`, `frontend`, `check`, `swagger`, `hash` (password hash for `GAMEFLEET_USERS`). Docker: `up`, `down`, `restart`, `logs` (`S=backend` for one service), `ps`, `shell`, `build`, `release` (build, tag and push both images to `DOCKER_REPO`, default `h3xachad`), `clean`.
 
 Images are tagged with the project version from `backend/pyproject.toml`; override with `make release VERSION=x.y.z`.
 

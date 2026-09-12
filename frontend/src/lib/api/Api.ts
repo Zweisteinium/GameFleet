@@ -145,14 +145,91 @@ export interface BaseServerInfo {
 
 /** ContainerInfo */
 export interface ContainerInfo {
+  /** Id */
+  id: string;
   /** Name */
   name: string;
   /** Image */
   image: string;
   /** State */
   state: string;
+  /** Status */
+  status: string;
   /** Ports */
   ports: PortBinding[];
+  /** Mounts */
+  mounts: ContainerMount[];
+  /** Labels */
+  labels: Record<string, string>;
+}
+
+/**
+ * ContainerMount
+ * A persistent path of the container: this is what a future backup/restore will snapshot.
+ */
+export interface ContainerMount {
+  /** Type */
+  type: string;
+  /** Source */
+  source: string;
+  /** Destination */
+  destination: string;
+}
+
+/**
+ * DetectedGame
+ * What GameFleet thinks a container is, and how it would be imported.
+ */
+export interface DetectedGame {
+  game: GameServerType;
+  /** Confidence */
+  confidence: string;
+  /** Reasons */
+  reasons: string[];
+  /** Address */
+  address: string;
+  /** Port */
+  port: number;
+  /** Query Port */
+  query_port?: number | null;
+  /** Rcon Port */
+  rcon_port?: number | null;
+  /**
+   * Has Rcon Password
+   * @default false
+   */
+  has_rcon_password?: boolean;
+  /** Data Path */
+  data_path?: string | null;
+  /** World Path */
+  world_path?: string | null;
+  /** Name */
+  name: string;
+}
+
+/** DiscoveredContainer */
+export interface DiscoveredContainer {
+  container: ContainerInfo;
+  detected?: DetectedGame | null;
+  /** Server Id */
+  server_id?: string | null;
+  /**
+   * Ignored
+   * @default false
+   */
+  ignored?: boolean;
+}
+
+/** DockerStatus */
+export interface DockerStatus {
+  /** Available */
+  available: boolean;
+  /** Error */
+  error?: string | null;
+  /** Auto Import */
+  auto_import: boolean;
+  /** Address */
+  address: string;
 }
 
 /**
@@ -257,6 +334,18 @@ export interface GameServerPublic {
   query_port?: number | null;
   /** Rcon Port */
   rcon_port?: number | null;
+  /**
+   * Source
+   * @maxLength 20
+   * @default "manual"
+   */
+  source?: string;
+  /** Container Name */
+  container_name?: string | null;
+  /** Data Path */
+  data_path?: string | null;
+  /** World Path */
+  world_path?: string | null;
   /** Id */
   id: string;
   /**
@@ -303,6 +392,48 @@ export interface GameTypeInfo {
 export interface HTTPValidationError {
   /** Detail */
   detail?: ValidationError[];
+}
+
+/**
+ * HostStats
+ * Resource usage of the container behind a server. Sampled on demand and cached for a few seconds.
+ */
+export interface HostStats {
+  /** Container Name */
+  container_name: string;
+  /** State */
+  state: string;
+  /** Status */
+  status: string;
+  /** Started At */
+  started_at?: string | null;
+  /** Cpu Percent */
+  cpu_percent?: number | null;
+  /** Cpu Limit */
+  cpu_limit?: number | null;
+  /** Memory Used */
+  memory_used?: number | null;
+  /** Memory Limit */
+  memory_limit?: number | null;
+  /** Data Size */
+  data_size?: number | null;
+  /** World Size */
+  world_size?: number | null;
+  /** Sizes Sampled At */
+  sizes_sampled_at?: number | null;
+  /** Sampled At */
+  sampled_at: number;
+  /** Error */
+  error?: string | null;
+}
+
+/** ImportRequest */
+export interface ImportRequest {
+  /** Container Name */
+  container_name: string;
+  game?: GameServerType | null;
+  /** Name */
+  name?: string | null;
 }
 
 /** LoginRequest */
@@ -372,10 +503,18 @@ export interface MinecraftServerInfo {
 
 /** PortBinding */
 export interface PortBinding {
+  /** Container Port */
+  container_port: number;
   /** Host Port */
-  host_port: number;
+  host_port?: number | null;
   /** Protocol */
   protocol: string;
+}
+
+/** PowerRequest */
+export interface PowerRequest {
+  /** Action */
+  action: "start" | "stop" | "restart";
 }
 
 /**
@@ -947,6 +1086,25 @@ export class Api<
         ...params,
       }),
   };
+  hostStats = {
+    /**
+     * @description Container state and resource usage for every Docker-linked server (cached per container).
+     *
+     * @tags servers
+     * @name GetAllHostStats
+     * @summary Get All Host Stats
+     * @request GET:/api/servers/host-stats
+     * @secure
+     */
+    getAllHostStats: (params: RequestParams = {}) =>
+      this.request<Record<string, HostStats>, any>({
+        path: `/api/servers/host-stats`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
   byType = {
     /**
      * @description Get all servers of a specific game type.
@@ -1013,7 +1171,7 @@ export class Api<
       }),
 
     /**
-     * @description Delete a game server.
+     * @description Delete a game server. A Docker-linked server's container is hidden from discovery afterwards.
      *
      * @tags servers
      * @name DeleteServer
@@ -1026,6 +1184,48 @@ export class Api<
         path: `/api/servers/${serverId}`,
         method: "DELETE",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description Container state, CPU, memory and data sizes of a Docker-linked server.
+     *
+     * @tags servers
+     * @name GetServerHostStats
+     * @summary Get Server Host Stats
+     * @request GET:/api/servers/{server_id}/host
+     * @secure
+     */
+    getServerHostStats: (serverId: string, params: RequestParams = {}) =>
+      this.request<HostStats, HTTPValidationError>({
+        path: `/api/servers/${serverId}/host`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description Start, stop or restart the container behind a Docker-linked server.
+     *
+     * @tags servers
+     * @name PowerServer
+     * @summary Power Server
+     * @request POST:/api/servers/{server_id}/power
+     * @secure
+     */
+    powerServer: (
+      serverId: string,
+      data: PowerRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<HostStats, HTTPValidationError>({
+        path: `/api/servers/${serverId}/power`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -1068,17 +1268,36 @@ export class Api<
         ...params,
       }),
   };
-  containers = {
+  status = {
     /**
-     * @description List every container on the host regardless of state.
+     * @description Whether the backend can talk to the Docker daemon (needs /var/run/docker.sock mounted).
      *
      * @tags docker
-     * @name ListAllContainersApiDockerContainersGet
-     * @summary List All Containers
+     * @name GetDockerStatus
+     * @summary Docker Status
+     * @request GET:/api/docker/status
+     * @secure
+     */
+    getDockerStatus: (params: RequestParams = {}) =>
+      this.request<DockerStatus, any>({
+        path: `/api/docker/status`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
+  containers = {
+    /**
+     * @description Every container on the host, regardless of state.
+     *
+     * @tags docker
+     * @name GetContainers
+     * @summary List Containers
      * @request GET:/api/docker/containers
      * @secure
      */
-    listAllContainersApiDockerContainersGet: (params: RequestParams = {}) =>
+    getContainers: (params: RequestParams = {}) =>
       this.request<ContainerInfo[], any>({
         path: `/api/docker/containers`,
         method: "GET",
@@ -1086,22 +1305,79 @@ export class Api<
         format: "json",
         ...params,
       }),
-
+  };
+  discovered = {
     /**
-     * @description List only containers labelled gamefleet.managed=true.
+     * @description Containers that look like game servers, with the server they are linked to (if imported). Calling this also imports labelled and well-known containers.
      *
      * @tags docker
-     * @name ListManagedContainersApiDockerContainersManagedGet
-     * @summary List Managed Containers
-     * @request GET:/api/docker/containers/managed
+     * @name GetDiscoveredContainers
+     * @summary Discovered
+     * @request GET:/api/docker/discovered
      * @secure
      */
-    listManagedContainersApiDockerContainersManagedGet: (
-      params: RequestParams = {},
-    ) =>
-      this.request<ContainerInfo[], any>({
-        path: `/api/docker/containers/managed`,
+    getDiscoveredContainers: (params: RequestParams = {}) =>
+      this.request<DiscoveredContainer[], any>({
+        path: `/api/docker/discovered`,
         method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
+  import = {
+    /**
+     * @description Import a discovered container as a server (or re-sync an already imported one).
+     *
+     * @tags docker
+     * @name ImportContainer
+     * @summary Import Container
+     * @request POST:/api/docker/import
+     * @secure
+     */
+    importContainer: (data: ImportRequest, params: RequestParams = {}) =>
+      this.request<GameServerPublic, HTTPValidationError>({
+        path: `/api/docker/import`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  ignored = {
+    /**
+     * @description Hide a container from discovery.
+     *
+     * @tags docker
+     * @name IgnoreContainer
+     * @summary Ignore Container
+     * @request PUT:/api/docker/ignored/{container_name}
+     * @secure
+     */
+    ignoreContainer: (containerName: string, params: RequestParams = {}) =>
+      this.request<any, HTTPValidationError>({
+        path: `/api/docker/ignored/${containerName}`,
+        method: "PUT",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description Show a hidden container in discovery again.
+     *
+     * @tags docker
+     * @name UnignoreContainer
+     * @summary Unignore Container
+     * @request DELETE:/api/docker/ignored/{container_name}
+     * @secure
+     */
+    unignoreContainer: (containerName: string, params: RequestParams = {}) =>
+      this.request<any, HTTPValidationError>({
+        path: `/api/docker/ignored/${containerName}`,
+        method: "DELETE",
         secure: true,
         format: "json",
         ...params,

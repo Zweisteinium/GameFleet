@@ -16,11 +16,24 @@ class GameServerBase(SQLModel):
     query_port: Optional[int] = Field(default=None, ge=1, le=65535)
     # RCON access, used by games that expose no public query protocol (Factorio, private ARK: SA).
     rcon_port: Optional[int] = Field(default=None, ge=1, le=65535)
+    # "manual" servers are only queried; "docker" servers run on this host and can be controlled.
+    source: str = Field(default="manual", max_length=20)
+    # Docker container name (stable across recreations, unlike the id) for source == "docker".
+    container_name: Optional[str] = Field(default=None, max_length=200)
+    # Persistent data directory and world/save directory inside the container: used for sizes today
+    # and for backup/restore later.
+    data_path: Optional[str] = Field(default=None, max_length=300)
+    world_path: Optional[str] = Field(default=None, max_length=300)
 
 
 class GameServer(GameServerBase, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     rcon_password: Optional[str] = Field(default=None, max_length=200)
+
+
+class IgnoredContainer(SQLModel, table=True):
+    """Containers the user dismissed from Docker discovery."""
+    container_name: str = Field(primary_key=True, max_length=200)
 
 
 class GameServerPublic(GameServerBase):

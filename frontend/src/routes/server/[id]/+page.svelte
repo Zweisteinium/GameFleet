@@ -6,13 +6,20 @@
 	import { api } from '$lib/api/ApiService';
 	import type { GameServerPublic } from '$lib/api/Api';
 	import { gameArtUrl, gameLabel, isMinecraft } from '$lib/games';
-	import { live, restoreLive, refreshServer, forgetServer } from '$lib/live.svelte';
+	import {
+		live,
+		restoreLive,
+		refreshServer,
+		refreshHostStats,
+		forgetServer
+	} from '$lib/live.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
 	import MinecraftMOTD from '$lib/components/MinecraftMOTD.svelte';
 	import GameDetails from '$lib/components/GameDetails.svelte';
 	import ServerForm from '$lib/components/ServerForm.svelte';
+	import HostPanel from '$lib/components/HostPanel.svelte';
 	import GameArt from '$lib/components/GameArt.svelte';
 	import PlayersBar from '$lib/components/PlayersBar.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -31,6 +38,8 @@
 	// Live data comes from the shared cache: instant when arriving from the dashboard, refreshed in the background.
 	const liveInfo = $derived(live.info[serverId] ?? null);
 	const refreshing = $derived(live.pending[serverId] ?? false);
+	const hostStats = $derived(live.host[serverId]);
+	const isLocal = $derived(server?.source === 'docker');
 
 	async function fetchServerData() {
 		if (!serverId) {
@@ -47,15 +56,25 @@
 		} finally {
 			loading = false;
 		}
-		await refreshServer(serverId);
+		await refreshLiveInfo();
 	}
 
 	async function refreshLiveInfo() {
-		if (serverId) await refreshServer(serverId);
+		if (!serverId) return;
+		await Promise.all([refreshServer(serverId), isLocal ? refreshHostStats(serverId) : null]);
+	}
+
+	async function power(action: 'start' | 'stop' | 'restart') {
+		if (!server) return;
+		live.host[server.id] = (await api.serverId.powerServer(server.id, { action })).data;
+		// Give the game a moment to come up, then re-query it.
+		setTimeout(() => refreshServer(serverId), 3000);
 	}
 
 	async function deleteServer() {
-		if (!server || !confirm(`Remove "${server.name}" from GameFleet?`)) return;
+		if (!server) return;
+		const note = isLocal ? ' The container itself is left untouched.' : '';
+		if (!confirm(`Remove "${server.name}" from GameFleet?${note}`)) return;
 		try {
 			await api.serverId.deleteServer(server.id);
 			forgetServer(server.id);
@@ -150,11 +169,21 @@
 						class="h-36 w-24 shrink-0 rounded-xl shadow-pop"
 					/>
 					<div class="min-w-0 pb-1">
-						<p class="text-ink-2 text-xs font-semibold tracking-wide uppercase">
+						<p class="text-ink-2 flex items-center gap-2 text-xs font-semibold tracking-wide uppercase">
 							{gameLabel(server.game)}
+							{#if isLocal}
+								<span
+									class="bg-surface-2 text-ink-2 inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[10px] font-medium normal-case"
+									><Icon name="box" size={11} />Docker</span
+								>
+							{/if}
 						</p>
 						<h1 class="font-display mt-1 text-3xl font-semibold tracking-tight">{server.name}</h1>
-						{#if !liveInfo}
+						{#if isLocal}
+			<HostPanel {server} stats={hostStats} onPower={power} />
+		{/if}
+
+		{#if !liveInfo}
 							<Skeleton class="mt-2 h-4 w-56" />
 						{:else if liveInfo.server_name && liveInfo.server_name !== server.name}
 							<p class="text-ink-2 mt-1 truncate text-sm">“{liveInfo.server_name}”</p>

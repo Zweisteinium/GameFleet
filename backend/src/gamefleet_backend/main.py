@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from importlib.metadata import version as package_version
@@ -8,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api import auth as auth_api, docker, games, servers
 from .auth import current_user, log_startup_state
 from .db.session import init_db
+from .services.docker_discovery_service import DISCOVERY_INTERVAL, discovery_loop
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -16,7 +18,10 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 async def lifespan(app: FastAPI):
     log_startup_state()
     await init_db()
+    task = asyncio.create_task(discovery_loop()) if DISCOVERY_INTERVAL > 0 else None
     yield
+    if task:
+        task.cancel()
 
 
 app = FastAPI(
