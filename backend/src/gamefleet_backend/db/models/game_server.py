@@ -30,4 +30,5 @@ class GameServerPublic(GameServerBase):
 
     @classmethod
     def from_server(cls, server: GameServer) -> "GameServerPublic":
-        return cls(**server.model_dump(exclude={"rcon_password"}), has_rcon=bool(server.rcon_password))
+        # Validate from attributes: table rows carry `game` as plain text and must be coerced back to the enum.
+        return cls.model_validate(server, from_attributes=True, update={"has_rcon": bool(server.rcon_password)})

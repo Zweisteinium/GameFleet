@@ -13,7 +13,7 @@
 			return parse.textToHTML(text);
 		} catch (error) {
 			console.warn('Failed to parse Minecraft MOTD:', error);
-			return text.replace(/§[0-9a-fk-or]/gi, '');
+			return parse.htmlStringFormatting(text.replace(/§[0-9a-fk-or]/gi, ''));
 		}
 	}
 
@@ -21,5 +21,6 @@
 </script>
 
 <div class="minecraft-motd {className}">
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -- textToHTML/htmlStringFormatting escape the server-provided text -->
 	{@html html}
 </div>

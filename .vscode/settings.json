@@ -1,5 +1,10 @@
 {
     "python.defaultInterpreterPath": "backend/.venv/bin/python",
     "python.terminal.activateEnvironment": true,
-    "python.terminal.activateEnvInCurrentTerminal": true
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    // Tailwind v4 CSS uses @import 'tailwindcss', @custom-variant, @theme and @apply,
+    // which the built-in CSS validator flags ("import statements do not load in parallel", "unknown at rule").
+    "css.lint.importStatement": "ignore",
+    "css.lint.unknownAtRules": "ignore",
+    "eslint.workingDirectories": ["frontend"]
 }

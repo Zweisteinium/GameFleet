@@ -11,5 +11,7 @@ export function loadPref<T>(key: string, fallback: T): T {
 export function savePref<T>(key: string, value: T): void {
 	try {
 		localStorage.setItem(`gamefleet:${key}`, JSON.stringify(value));
-	} catch {}
+	} catch {
+		// Storage can be unavailable (private mode, quota); the value is only a convenience.
+	}
 }

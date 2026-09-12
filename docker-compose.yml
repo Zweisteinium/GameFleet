@@ -1,6 +1,7 @@
 services:
   backend:
     container_name: gamefleet-backend
+    image: ${DOCKER_REPO:-h3xachad}/gamefleet-backend:${VERSION:-latest}
     network_mode: host
     build:
       context: ./backend
@@ -17,6 +18,7 @@ services:
 
   frontend:
     container_name: gamefleet-frontend
+    image: ${DOCKER_REPO:-h3xachad}/gamefleet-frontend:${VERSION:-latest}
     build:
       context: ./frontend
       target: ${FRONTEND_TARGET:-node-server}

@@ -1,37 +1,39 @@
+# Runs GameFleet from the prebuilt Docker Hub images together with its own PostgreSQL.
+# Copy to docker-compose.yml (or use `docker compose -f docker-compose-example.yml up -d`) and set DB_PASSWORD in .env.
 services:
   postgres:
     image: postgres:16
     container_name: gamefleet-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-gamefleet}
       POSTGRES_USER: ${DB_USER:-gamefleet}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - gamefleet_postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${DB_PORT:-5432}:5432"
+      - gamefleet-postgres:/var/lib/postgresql/data
 
   backend:
+    image: h3xachad/gamefleet-backend:${VERSION:-latest}
     container_name: gamefleet-backend
-    build:
-      context: ./backend
-      target: ${TARGET:-prod}
+    restart: unless-stopped
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-gamefleet}
       DB_USER: ${DB_USER:-gamefleet}
       DB_PASSWORD: ${DB_PASSWORD}
+      ASSET_CACHE_DIR: /app/data/assets
+    volumes:
+      - gamefleet-assets:/app/data/assets
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
       - postgres
 
   frontend:
+    image: h3xachad/gamefleet-frontend:${VERSION:-latest}
     container_name: gamefleet-frontend
-    build:
-      context: ./frontend
-      target: ${FRONTEND_TARGET:-node-server}
+    restart: unless-stopped
     environment:
       GAMEFLEET_API_URL: http://localhost:${BACKEND_PORT:-8000}
     ports:
@@ -40,4 +42,5 @@ services:
       - backend
 
 volumes:
-  gamefleet_postgres_data:
+  gamefleet-postgres:
+  gamefleet-assets:

@@ -1,5 +1,5 @@
 # Build stage
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -11,7 +11,7 @@ RUN pnpm prepare
 RUN pnpm build
 
 # Lightweight Node.js server option (default)
-FROM node:22-alpine AS node-server
+FROM node:24-alpine AS node-server
 
 WORKDIR /app
 COPY --from=build /app/build ./build
