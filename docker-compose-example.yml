@@ -25,8 +25,15 @@ services:
       ASSET_CACHE_DIR: /app/data/assets
       GAMEFLEET_USERS: ${GAMEFLEET_USERS:-}
       GAMEFLEET_SECRET: ${GAMEFLEET_SECRET:-}
+      DOCKER_AUTO_IMPORT: ${DOCKER_AUTO_IMPORT:-true}
+      # Without host networking, containers are reached through the Docker host; set this to its LAN IP.
+      DOCKER_SERVER_ADDRESS: ${DOCKER_SERVER_ADDRESS:-host.docker.internal}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - gamefleet-assets:/app/data/assets
+      # Discovery and control of game-server containers on this host (root-equivalent; drop it if unwanted).
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:

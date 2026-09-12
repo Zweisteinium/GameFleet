@@ -1,13 +1,19 @@
+import asyncio
+from typing import Literal, Sequence
+
+import docker.errors
 from fastapi import APIRouter, Depends, HTTPException
-from typing import Sequence
 from pydantic import BaseModel, Field
 
-from gamefleet_backend.models.game_server_type import GameServerType, GAME_CATALOG, QueryProtocol
 from gamefleet_backend.db.models.game_server import GameServer, GameServerPublic
+from gamefleet_backend.dependencies import get_docker_discovery_service, get_game_server_service
+from gamefleet_backend.models.container_info import HostStats
+from gamefleet_backend.models.game_server_type import GAME_CATALOG, GameServerType, QueryProtocol
+from gamefleet_backend.models.server_info import LiveServerInfo
+from gamefleet_backend.services.docker_discovery_service import DockerDiscoveryService
+from gamefleet_backend.services.docker_service import DockerUnavailable, docker_service
 from gamefleet_backend.services.game_server_service import GameServerService
 from gamefleet_backend.services.live_server_info_service import LiveServerInfoService
-from gamefleet_backend.dependencies import get_game_server_service
-from gamefleet_backend.models.server_info import LiveServerInfo
 
 
 router = APIRouter()
@@ -31,6 +37,10 @@ class GameServerUpdate(BaseModel):
     query_port: int | None = Field(default=None, ge=1, le=65535)
     rcon_port: int | None = Field(default=None, ge=1, le=65535)
     rcon_password: str | None = None
+
+
+class PowerRequest(BaseModel):
+    action: Literal["start", "stop", "restart"]
 
 
 class GameTypeInfo(BaseModel):
@@ -92,6 +102,22 @@ async def get_all_servers_live_info(
     return await LiveServerInfoService.get_all_server_info(list(servers))
 
 
+@router.get('/host-stats', response_model=dict[str, HostStats], operation_id="getAllHostStats")
+async def get_all_host_stats(
+    service: GameServerService = Depends(get_game_server_service)
+):
+    """Container state and resource usage for every Docker-linked server (cached per container)."""
+    servers = [s for s in await service.get_all_servers() if s.source == "docker" and s.container_name]
+    if not servers:
+        return {}
+    try:
+        await docker_service.status()
+        results = await asyncio.gather(*(docker_service.host_stats(s.container_name, s.data_path, s.world_path) for s in servers))
+    except DockerUnavailable:
+        return {}
+    return {server.id: stats for server, stats in zip(servers, results)}
+
+
 @router.get('/by-type/{server_type}', response_model=Sequence[GameServerPublic], operation_id="getServersByType")
 async def get_servers_by_type(
     server_type: GameServerType,
@@ -130,13 +156,61 @@ async def update_server(
 @router.delete('/{server_id}', operation_id="deleteServer")
 async def delete_server(
     server_id: str,
+    service: GameServerService = Depends(get_game_server_service),
+    discovery: DockerDiscoveryService = Depends(get_docker_discovery_service),
+):
+    """Delete a game server. A Docker-linked server's container is hidden from discovery afterwards."""
+    server = await service.get_server_by_id(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+    if server.source == "docker" and server.container_name:
+        # Otherwise discovery would offer (or re-import) the container right away.
+        await discovery.set_ignored(server.container_name, True)
+        docker_service.forget(server.container_name)
+    await service.delete_server(server_id)
+    return {"message": "Server deleted successfully"}
+
+
+async def _docker_server(server_id: str, service: GameServerService) -> GameServer:
+    server = await service.get_server_by_id(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+    if server.source != "docker" or not server.container_name:
+        raise HTTPException(status_code=409, detail="This server is not linked to a Docker container")
+    return server
+
+
+@router.get('/{server_id}/host', response_model=HostStats, operation_id="getServerHostStats")
+async def get_server_host_stats(
+    server_id: str,
     service: GameServerService = Depends(get_game_server_service)
 ):
-    """Delete a game server."""
-    success = await service.delete_server(server_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Server not found")
-    return {"message": "Server deleted successfully"}
+    """Container state, CPU, memory and data sizes of a Docker-linked server."""
+    server = await _docker_server(server_id, service)
+    try:
+        return await docker_service.host_stats(server.container_name, server.data_path, server.world_path)
+    except DockerUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
+
+
+@router.post('/{server_id}/power', response_model=HostStats, operation_id="powerServer")
+async def power_server(
+    server_id: str,
+    body: PowerRequest,
+    service: GameServerService = Depends(get_game_server_service)
+):
+    """Start, stop or restart the container behind a Docker-linked server."""
+    server = await _docker_server(server_id, service)
+    try:
+        await docker_service.power(server.container_name, body.action)
+    except DockerUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
+    except docker.errors.NotFound:
+        raise HTTPException(status_code=404, detail="Container not found")
+    except docker.errors.APIError as exc:
+        raise HTTPException(status_code=502, detail=f"Docker refused the request: {exc.explanation or exc}")
+    docker_service.forget(server.container_name)
+    return await docker_service.host_stats(server.container_name, server.data_path, server.world_path)
 
 
 @router.get('/{server_id}/live-info', response_model=LiveServerInfo, operation_id="getServerLiveInfoById")

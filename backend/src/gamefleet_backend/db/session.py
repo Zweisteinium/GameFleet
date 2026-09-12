@@ -35,6 +35,12 @@ LEGACY_SCHEMA_UPGRADES = [
     # 'game' used to be a Postgres enum, which had to be altered for every new game type.
     "ALTER TABLE gameserver ALTER COLUMN game TYPE VARCHAR(50) USING game::text",
     "DROP TYPE IF EXISTS gameservertype",
+    # 0.6: servers can be linked to local Docker containers.
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'manual'",
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS container_name VARCHAR(200)",
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS data_path VARCHAR(300)",
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS world_path VARCHAR(300)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_gameserver_container_name ON gameserver (container_name)",
 ]
 
 

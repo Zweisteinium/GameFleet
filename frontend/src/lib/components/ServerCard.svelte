@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { ServerStatus, type GameServerPublic } from '$lib/api/Api';
+	import { ServerStatus, type GameServerPublic, type HostStats } from '$lib/api/Api';
 	import type { LiveServerInfo } from '$lib/api/types';
 	import { resolve } from '$app/paths';
 	import { gameLabel } from '$lib/games';
+	import { formatBytes, hostStateLabel, hostTone } from '$lib/gameinfo';
 	import StatusBadge from './StatusBadge.svelte';
 	import GameArt from './GameArt.svelte';
 	import PlayersBar from './PlayersBar.svelte';
@@ -12,16 +13,51 @@
 	interface Props {
 		server: GameServerPublic;
 		liveInfo?: LiveServerInfo;
+		/** Container stats for servers that run in Docker on this host. */
+		host?: HostStats;
 		/** True while a query is in flight; only shows placeholders when there is no data yet. */
 		pending?: boolean;
 		variant?: 'grid' | 'list';
 	}
 
-	let { server, liveInfo, pending = false, variant = 'grid' }: Props = $props();
+	let { server, liveInfo, host, pending = false, variant = 'grid' }: Props = $props();
 
 	const loading = $derived(!liveInfo);
 	const offline = $derived(liveInfo?.status === ServerStatus.Offline);
+	const local = $derived(server.source === 'docker');
+
+	const hostDot: Record<string, string> = {
+		success: 'bg-emerald-500',
+		warning: 'bg-amber-500',
+		danger: 'bg-rose-500',
+		neutral: 'bg-ink-3',
+		accent: 'bg-accent'
+	};
 </script>
+
+{#snippet hostChip()}
+	{#if local}
+		<span
+			class="bg-surface-2 text-ink-2 inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[10px] font-medium"
+			title={host ? `${hostStateLabel(host)} · ${host.status}` : 'Runs in Docker on this host'}
+		>
+			<Icon name="box" size={11} />
+			{#if host}<span class="h-1.5 w-1.5 rounded-full {hostDot[hostTone(host.state)]}"></span>{/if}
+			Docker
+		</span>
+	{/if}
+{/snippet}
+
+{#snippet hostMeta(size: number)}
+	{#if host?.state === 'running'}
+		{#if host.cpu_percent != null}<span class="meta" title="CPU"
+				><Icon name="cpu" size={size} />{host.cpu_percent.toFixed(0)}%</span
+			>{/if}
+		{#if host.memory_used != null}<span class="meta" title="Memory"
+				><Icon name="memory" size={size} />{formatBytes(host.memory_used)}</span
+			>{/if}
+	{/if}
+{/snippet}
 
 {#if variant === 'list'}
 	<a
@@ -34,7 +70,9 @@
 			class="h-12 w-9 rounded-md {offline ? 'grayscale' : ''}"
 		/>
 		<div class="min-w-0 flex-1">
-			<h3 class="truncate font-semibold group-hover:text-accent">{server.name}</h3>
+			<h3 class="flex items-center gap-2 truncate font-semibold group-hover:text-accent">
+				{server.name}{@render hostChip()}
+			</h3>
 			<p class="text-ink-2 truncate text-xs">
 				{gameLabel(server.game)} · {server.address}:{server.port}
 			</p>
@@ -49,6 +87,7 @@
 				{#if liveInfo?.latency}<span class="meta"
 						><Icon name="zap" size={14} />{Math.trunc(liveInfo.latency)} ms</span
 					>{/if}
+				{@render hostMeta(14)}
 			{/if}
 		</div>
 		<div class="hidden w-40 sm:block">
@@ -96,7 +135,9 @@
 						<Skeleton class="h-6 w-16 rounded-full" />
 					{/if}
 				</div>
-				<p class="text-ink-2 mb-3 text-xs font-medium">{gameLabel(server.game)}</p>
+				<p class="text-ink-2 mb-3 flex items-center gap-2 text-xs font-medium">
+					{gameLabel(server.game)}{@render hostChip()}
+				</p>
 
 				{#if loading}
 					<div class="flex items-center gap-2">
@@ -123,6 +164,7 @@
 						{#if liveInfo?.version}<span class="meta"
 								><Icon name="tag" size={13} />{liveInfo.version}</span
 							>{/if}
+						{@render hostMeta(13)}
 					{/if}
 				</div>
 			</div>

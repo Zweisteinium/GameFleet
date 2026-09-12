@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { api } from '$lib/api/ApiService';
-	import { ServerStatus, type GameServerPublic } from '$lib/api/Api';
+	import { ServerStatus, type DiscoveredContainer, type GameServerPublic } from '$lib/api/Api';
 	import { gameLabel } from '$lib/games';
 	import { live, restoreLive, refreshServers } from '$lib/live.svelte';
 	import { loadPref, savePref } from '$lib/prefs';
 	import ServerCard from '$lib/components/ServerCard.svelte';
 	import ServerForm from '$lib/components/ServerForm.svelte';
+	import DiscoveredContainers from '$lib/components/DiscoveredContainers.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
 	import Toolbar, { type ToolbarState } from '$lib/components/Toolbar.svelte';
@@ -29,6 +30,7 @@
 	let showForm = $state(false);
 	let lastRefresh = $state<Date | null>(null);
 	let toolbar = $state<ToolbarState>(DEFAULT_TOOLBAR);
+	let discovered = $state<DiscoveredContainer[]>([]);
 	let refreshTimer: ReturnType<typeof setInterval>;
 
 	const serverLiveInfo = $derived(live.info);
@@ -100,6 +102,28 @@
 		}
 	}
 
+	/** Docker discovery also imports labelled/known containers, so the server list is reloaded afterwards. */
+	async function loadDiscovered() {
+		try {
+			const status = (await api.status.getDockerStatus()).data;
+			if (!status.available) return;
+			discovered = (await api.discovered.getDiscoveredContainers()).data;
+			const known = new Set(gameServers.map((s) => s.id));
+			if (discovered.some((item) => item.server_id && !known.has(item.server_id))) {
+				await loadServers();
+				await refreshLiveInfo();
+			}
+		} catch (error) {
+			console.error('Docker discovery failed:', error);
+		}
+	}
+
+	async function onDiscoveryChanged() {
+		await loadServers();
+		await loadDiscovered();
+		await refreshLiveInfo();
+	}
+
 	async function refreshLiveInfo() {
 		refreshing = true;
 		try {
@@ -116,7 +140,7 @@
 		restoreLive();
 		await loadServers();
 		loading = false;
-		await refreshLiveInfo();
+		await Promise.all([refreshLiveInfo(), loadDiscovered()]);
 		refreshTimer = setInterval(refreshLiveInfo, REFRESH_INTERVAL_MS);
 	});
 
@@ -170,7 +194,7 @@
 		<div class="py-24">
 			<LoadingSpinner size="lg" message="Loading your fleet…" />
 		</div>
-	{:else if gameServers.length === 0}
+	{:else if gameServers.length === 0 && discovered.length === 0}
 		<div class="card rise mx-auto max-w-lg px-8 py-16 text-center">
 			<span
 				class="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-accent-soft text-accent"
@@ -200,6 +224,8 @@
 			<StatCard icon="users" title="Players" value={totalPlayers} tone="accent" size="sm" />
 		</div>
 
+		<DiscoveredContainers items={discovered} onChanged={onDiscoveryChanged} />
+
 		<Toolbar bind:state={toolbar} {availableGames} resultCount={visibleServers.length} />
 
 		{#if visibleServers.length === 0}
@@ -210,6 +236,7 @@
 					<ServerCard
 						{server}
 						liveInfo={serverLiveInfo[server.id]}
+						host={live.host[server.id]}
 						pending={live.pending[server.id]}
 						variant="list"
 					/>
@@ -221,6 +248,7 @@
 					<ServerCard
 						{server}
 						liveInfo={serverLiveInfo[server.id]}
+						host={live.host[server.id]}
 						pending={live.pending[server.id]}
 					/>
 				{/each}
