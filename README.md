@@ -80,25 +80,16 @@ Prebuilt images are published as `h3xachad/gamefleet-backend` and `h3xachad/game
 
 ## Development
 
-Prerequisites: [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io/), Docker (for Postgres), Python 3.13, Node 22.
+Prerequisites: [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io/), Docker (for Postgres), Python 3.14, Node 24. uv downloads Python 3.14 automatically if it is missing; the pnpm version is pinned in `package.json` (corepack).
 
 ```bash
-# database (or use any Postgres; adjust backend/.env)
-docker run -d --name gamefleet-postgres -e POSTGRES_USER=gamefleet_user -e POSTGRES_PASSWORD=gamefleet_pass \
-  -e POSTGRES_DB=gamefleet_db -p 5432:5432 -v gamefleet-postgres:/var/lib/postgresql/data postgres:16
-
-# backend on http://localhost:8000
-cd backend
-uv sync
-make dev            # = uv run uvicorn gamefleet_backend.main:app --reload
-
-# frontend on http://localhost:3000
-cd frontend
-pnpm install
-pnpm dev
+make install        # uv sync + pnpm install
+make db             # local PostgreSQL 16 container (or use any Postgres; adjust backend/.env)
+make backend        # API with auto-reload on http://localhost:8000
+make frontend       # SvelteKit dev server on http://localhost:3000
 ```
 
-Useful frontend scripts: `pnpm check` (svelte-check), `pnpm build`, `pnpm lint`, and `pnpm swagger` to regenerate `src/lib/api/Api.ts` from the running backend's OpenAPI schema. Run it whenever you change API models.
+`make check` runs svelte-check and ESLint on the frontend and import-checks the backend. `make swagger` regenerates `frontend/src/lib/api/Api.ts` from the running backend's OpenAPI schema; run it whenever you change API models.
 
 Append `?theme=light` or `?theme=dark` to any URL to force a theme (useful for sharing links).
 
@@ -121,9 +112,9 @@ docs/      screenshots
 
 ## Make targets
 
-Root `Makefile` (Docker): `make dev` (foreground with build), `make up`, `make down`, `make restart`, `make logs`, `make build`, `make release` (build, tag and push images), `make clean`.
+`make help` lists everything. Native development: `install`, `db`, `backend`, `frontend`, `check`, `swagger`. Docker: `up`, `down`, `restart`, `logs` (`S=backend` for one service), `ps`, `shell`, `build`, `release` (build, tag and push both images to `DOCKER_REPO`, default `h3xachad`), `clean`.
 
-`backend/Makefile` (native): `make dev`, `make start`, `make migrate`, `make createmigration`.
+Images are tagged with the project version from `backend/pyproject.toml`; override with `make release VERSION=x.y.z`.
 
 ## License
 

@@ -23,7 +23,9 @@
 		apply(!isDark);
 		try {
 			localStorage.setItem('theme', isDark ? 'dark' : 'light');
-		} catch {}
+		} catch {
+			// Storage can be unavailable (private mode, quota); the value is only a convenience.
+		}
 	}
 </script>
 

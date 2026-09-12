@@ -1,67 +1,74 @@
-# GameFleet - Docker Management
+# GameFleet - one Makefile for native development and Docker deployment.
+# Run `make` or `make help` for the list of targets.
 
-# Configuration
 DOCKER_REPO ?= h3xachad
-PROJECT_NAME = gamefleet
-VERSION ?= latest
-BACKEND_IMAGE = $(DOCKER_REPO)/$(PROJECT_NAME)-backend
-FRONTEND_IMAGE = $(DOCKER_REPO)/$(PROJECT_NAME)-frontend
+# Image tag defaults to the project version in backend/pyproject.toml (kept in sync with frontend/package.json).
+VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' backend/pyproject.toml)
+BACKEND_IMAGE  = $(DOCKER_REPO)/gamefleet-backend
+FRONTEND_IMAGE = $(DOCKER_REPO)/gamefleet-frontend
+COMPOSE = DOCKER_REPO=$(DOCKER_REPO) VERSION=$(VERSION) docker compose
 
-# Development & Production
-dev: ## Start development environment
-	docker-compose up --build
+.DEFAULT_GOAL := help
+.PHONY: help install backend frontend db check swagger up down restart logs ps shell build release clean
 
-up: ## Start production environment
-	docker-compose up -d --build
+##@ Native development
 
-down: ## Stop all services
-	docker-compose down
+install: ## Install backend (uv) and frontend (pnpm) dependencies
+	cd backend && uv sync
+	cd frontend && pnpm install
 
-restart: ## Restart all services
-	docker-compose restart
+backend: ## Run the API with auto-reload on http://localhost:8000
+	cd backend && uv run uvicorn gamefleet_backend.main:app --reload --host 127.0.0.1 --port 8000
 
-# Building
-build: ## Build all images
-	docker-compose build --no-cache
+frontend: ## Run the SvelteKit dev server on http://localhost:3000
+	cd frontend && pnpm dev
 
-# Docker Hub Operations
-tag: ## Tag images for Docker Hub
-	docker tag $(PROJECT_NAME)_backend $(BACKEND_IMAGE):$(VERSION)
-	docker tag $(PROJECT_NAME)_frontend $(FRONTEND_IMAGE):$(VERSION)
+db: ## Start a local PostgreSQL 16 container for development (matches backend/.env defaults)
+	docker run -d --name gamefleet-postgres --restart unless-stopped \
+		-e POSTGRES_USER=gamefleet_user -e POSTGRES_PASSWORD=gamefleet_pass -e POSTGRES_DB=gamefleet_db \
+		-p 5432:5432 -v gamefleet-postgres:/var/lib/postgresql/data postgres:16
 
-push: tag ## Push images to Docker Hub
+check: ## Type-check and lint the frontend, import-check the backend
+	cd frontend && pnpm check && pnpm exec eslint .
+	cd backend && uv run python -c "import gamefleet_backend.main"
+
+swagger: ## Regenerate frontend/src/lib/api from the running backend's OpenAPI schema
+	cd frontend && pnpm swagger
+
+##@ Docker (docker-compose.yml, configured through .env)
+
+up: ## Build and start backend + frontend in the background
+	$(COMPOSE) up -d --build
+
+down: ## Stop and remove the containers
+	$(COMPOSE) down
+
+restart: ## Restart the containers
+	$(COMPOSE) restart
+
+logs: ## Follow logs of all services (make logs S=backend for one)
+	$(COMPOSE) logs -f $(S)
+
+ps: ## Show container status
+	$(COMPOSE) ps
+
+shell: ## Open a shell in the backend container
+	$(COMPOSE) exec backend /bin/bash
+
+build: ## Build both images from scratch, tagged $(VERSION)
+	$(COMPOSE) build --no-cache
+
+release: build ## Build, tag as latest and push both images to $(DOCKER_REPO)
+	docker tag $(BACKEND_IMAGE):$(VERSION) $(BACKEND_IMAGE):latest
+	docker tag $(FRONTEND_IMAGE):$(VERSION) $(FRONTEND_IMAGE):latest
 	docker push $(BACKEND_IMAGE):$(VERSION)
+	docker push $(BACKEND_IMAGE):latest
 	docker push $(FRONTEND_IMAGE):$(VERSION)
+	docker push $(FRONTEND_IMAGE):latest
 
-pull: ## Pull images from Docker Hub
-	docker pull $(BACKEND_IMAGE):$(VERSION)
-	docker pull $(FRONTEND_IMAGE):$(VERSION)
+clean: ## Stop containers and remove volumes (deletes the cached game artwork)
+	$(COMPOSE) down -v
 
-release: build tag push ## Build, tag and push new release
-
-# Utilities
-logs: ## Follow logs from all services
-	docker-compose logs -f
-
-logs-backend: ## Follow backend logs only
-	docker-compose logs -f backend
-
-status: ## Show container status
-	docker-compose ps
-
-shell-backend: ## Open shell in backend container
-	docker-compose exec backend /bin/bash
-
-# Cleanup
-clean: ## Stop and remove containers with volumes
-	docker-compose down -v
-
-clean-all: clean ## Full cleanup including images
-	docker system prune -f
-
-help: ## Show this help message
-	@echo "GameFleet Docker Management"
-	@echo ""
-	@echo "Usage: make [target] [DOCKER_REPO=username] [VERSION=tag]"
-	@echo ""
-	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ { printf "  %-20s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+help: ## Show this help
+	@echo "GameFleet $(VERSION)   (make [target] [DOCKER_REPO=user] [VERSION=tag])"
+	@awk 'BEGIN {FS = ":.*##"} /^##@/ { printf "\n%s\n", substr($$0, 5) } /^[a-zA-Z_-]+:.*##/ { printf "  %-12s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)

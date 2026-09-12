@@ -31,7 +31,9 @@ export function restoreLive() {
 function persist() {
 	try {
 		sessionStorage.setItem(STORAGE_KEY, JSON.stringify(live.info));
-	} catch {}
+	} catch {
+		// Storage can be unavailable (private mode, quota); the value is only a convenience.
+	}
 }
 
 export async function refreshServer(id: string): Promise<void> {

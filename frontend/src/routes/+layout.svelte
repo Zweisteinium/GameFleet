@@ -2,6 +2,7 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { API_BASE_URL } from '$lib/api/ApiService';
@@ -18,7 +19,7 @@
 
 	<header class="relative z-10">
 		<div class="mx-auto flex h-16 max-w-[90rem] items-center justify-between px-4 sm:px-6">
-			<a href="/main" class="flex items-center gap-2.5" aria-label="GameFleet home">
+			<a href={resolve('/main')} class="flex items-center gap-2.5" aria-label="GameFleet home">
 				<span
 					class="grid h-9 w-9 place-items-center rounded-xl text-white shadow-card"
 					style="background: linear-gradient(135deg, var(--accent), var(--accent-2))"
@@ -30,7 +31,7 @@
 
 			<nav class="flex items-center gap-1">
 				<a
-					href="/main"
+					href={resolve('/main')}
 					class="btn-ghost h-9 px-3 text-sm"
 					aria-current={page.url.pathname.startsWith('/main') ? 'page' : undefined}
 				>

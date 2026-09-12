@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from importlib.metadata import version as package_version
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,7 +16,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Game Server Dashboard API",
     description="API for managing and monitoring game servers",
-    version="0.1.0",
+    version=package_version("gamefleet-backend"),  # single source of truth: pyproject.toml
     docs_url="/swagger",
     redoc_url="/redoc",
     openapi_url="/openapi.json",

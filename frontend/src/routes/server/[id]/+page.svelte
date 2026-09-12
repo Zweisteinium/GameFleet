@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { onMount, onDestroy } from 'svelte';
 	import { api } from '$lib/api/ApiService';
 	import type { GameServerPublic } from '$lib/api/Api';
@@ -58,7 +59,7 @@
 		try {
 			await api.serverId.deleteServer(server.id);
 			forgetServer(server.id);
-			goto('/main');
+			goto(resolve('/main'));
 		} catch (err) {
 			console.error('Failed to delete server:', err);
 			error = 'Failed to delete server';
@@ -101,7 +102,7 @@
 </svelte:head>
 
 <div class="pt-4">
-	<a href="/main" class="btn-ghost -ml-3 h-9 px-3 text-sm">
+	<a href={resolve('/main')} class="btn-ghost -ml-3 h-9 px-3 text-sm">
 		<Icon name="arrow-left" size={16} />
 		All servers
 	</a>
@@ -118,7 +119,7 @@
 		</span>
 		<h2 class="font-display text-lg font-semibold">Something went wrong</h2>
 		<p class="text-ink-2 mt-1 mb-6 text-sm">{error}</p>
-		<a href="/main" class="btn-primary">Back to dashboard</a>
+		<a href={resolve('/main')} class="btn-primary">Back to dashboard</a>
 	</div>
 {:else if server}
 	<div class="rise mt-4 space-y-5">

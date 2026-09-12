@@ -1,9 +1,9 @@
 [project]
 name = "gamefleet-backend"
-version = "0.2.0"
+version = "0.5.0"
 description = "Placeholder :)"
 readme = ""
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.16.5",
     "asyncpg>=0.30.0",
@@ -11,13 +11,17 @@ dependencies = [
     "fastapi>=0.118.0",
     "mcstatus>=12.0.5",
     "psycopg2-binary>=2.9.10",
-    "python-dotenv>=1.0.1,<1.1.0",
+    "python-dotenv>=1.2.3",
     "sqlmodel>=0.0.25",
     "uvicorn>=0.37.0",
     "python-a2s>=1.4.1",
     "satisfactory-api-client>=0.1.0",
     "aiohttp>=3.14.3",
 ]
+
+[tool.uv]
+# satisfactory-api-client 0.2.1 declares python-dotenv~=1.0.1 but never imports it; allow the current release.
+override-dependencies = ["python-dotenv>=1.2.3"]
 
 [build-system]
 requires = ["setuptools", "wheel"]

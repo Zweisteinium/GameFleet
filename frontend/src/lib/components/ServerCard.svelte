@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { ServerStatus, type GameServerPublic } from '$lib/api/Api';
 	import type { LiveServerInfo } from '$lib/api/types';
+	import { resolve } from '$app/paths';
 	import { gameLabel } from '$lib/games';
 	import StatusBadge from './StatusBadge.svelte';
 	import GameArt from './GameArt.svelte';
@@ -24,7 +25,7 @@
 
 {#if variant === 'list'}
 	<a
-		href="/server/{server.id}"
+		href={resolve('/server/[id]', { id: server.id })}
 		class="card hover:border-line-2 group flex items-center gap-4 px-4 py-3 transition-all hover:-translate-y-px"
 	>
 		<GameArt
@@ -68,7 +69,7 @@
 	</a>
 {:else}
 	<a
-		href="/server/{server.id}"
+		href={resolve('/server/[id]', { id: server.id })}
 		class="card hover:border-line-2 group flex flex-col overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-pop"
 	>
 		<div class="flex gap-4 p-4">

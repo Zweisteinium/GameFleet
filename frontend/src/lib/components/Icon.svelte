@@ -81,5 +81,6 @@
 	class="shrink-0 {className}"
 	aria-hidden="true"
 >
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -- static SVG markup from the local ICONS map, never user input -->
 	{@html ICONS[name] ?? ''}
 </svg>
