@@ -8,10 +8,11 @@ __pycache__/
 .env
 *.db
 *.sqlite3
+data/
 
 # OS
 .DS_Store
 Thumbs.db
 
 # Logs
-*.logdata/
+*.log
