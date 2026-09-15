@@ -1,5 +1,4 @@
 import { GameServerType } from '$lib/api/Api';
-import { API_BASE_URL } from '$lib/api/ApiService';
 
 export const GAME_LABELS: Record<GameServerType, string> = {
 	[GameServerType.Minecraft]: 'Minecraft (Java)',
@@ -30,7 +29,7 @@ export function gameLabel(game: GameServerType): string {
 
 /** Artwork is downloaded once by the backend and served from its disk cache. */
 export function gameArtUrl(game: GameServerType, kind: 'poster' | 'hero'): string {
-	return `${API_BASE_URL}/api/games/${game}/${kind}`;
+	return `/api/games/${game}/${kind}`;
 }
 
 /** Games whose default artwork is an icon rather than a poster; shown framed like a server icon. */

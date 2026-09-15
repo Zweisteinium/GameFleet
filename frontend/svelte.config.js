@@ -1,21 +1,14 @@
-import adapter from '@sveltejs/adapter-static';
+import adapter from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-	// Consult https://svelte.dev/docs/kit/integrations
-	// for more information about preprocessors
 	preprocess: vitePreprocess(),
 
 	kit: {
-		// Configure as SPA (Single Page App)
-		adapter: adapter({
-			pages: 'build',
-			assets: 'build',
-			fallback: 'index.html',  // SPA mode - all routes serve index.html
-			precompress: false,
-			strict: false  // Allow dynamic routes
-		})
+		// Node server that serves the client-only app (ssr is off in the root layout) and forwards
+		// backend requests to BACKEND_URL (src/hooks.server.ts), so the browser only talks to one origin.
+		adapter: adapter({ out: 'build' })
 	}
 };
 

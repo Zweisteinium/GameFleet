@@ -1,15 +1,20 @@
+# GameFleet: `make up` builds the images from source, `docker compose pull && docker compose up -d` runs the
+# published ones. Everything is configured through .env (see .env.example). The browser only talks to the
+# frontend, which forwards /api to the backend, so only FRONTEND_PORT has to be reachable; BACKEND_PORT exposes
+# the API and its Swagger UI directly.
 name: gamefleet
 
 services:
   backend:
     container_name: gamefleet-backend
     image: ${DOCKER_REPO:-h3xachad}/gamefleet-backend:${VERSION:-latest}
-    network_mode: host
     build:
       context: ./backend
       target: ${TARGET:-prod}
+    restart: unless-stopped
     environment:
-      DB_HOST: ${DB_HOST:-localhost}
+      # Unset DB_HOST means the Postgres published on this host (make db or your own); native dev uses localhost.
+      DB_HOST: ${DB_HOST:-host.docker.internal}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-gamefleet}
       DB_USER: ${DB_USER:-gamefleet}
@@ -18,8 +23,14 @@ services:
       # Login: "name:password,name2:password2" (plain or scrypt hashes from `make hash`; escape $ as $$ in .env).
       GAMEFLEET_USERS: ${GAMEFLEET_USERS:-}
       GAMEFLEET_SECRET: ${GAMEFLEET_SECRET:-}
-      # Docker discovery of game servers on this host (needs the socket mount below).
+      # Docker discovery of game servers on this host (needs the socket mount below); their published ports are
+      # reached through the Docker host.
       DOCKER_AUTO_IMPORT: ${DOCKER_AUTO_IMPORT:-true}
+      DOCKER_SERVER_ADDRESS: ${DOCKER_SERVER_ADDRESS:-host.docker.internal}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - gamefleet-assets:/app/data/assets
       # Lets GameFleet find, control and measure game-server containers. The socket is root-equivalent
@@ -31,16 +42,15 @@ services:
     image: ${DOCKER_REPO:-h3xachad}/gamefleet-frontend:${VERSION:-latest}
     build:
       context: ./frontend
-      target: ${FRONTEND_TARGET:-node-server}
+    restart: unless-stopped
     environment:
-      GAMEFLEET_API_URL: http://localhost:${BACKEND_PORT:-8000}
+      BACKEND_URL: http://backend:8000
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - backend
 
-  # Development database behind the "db" profile: `make db` starts it, `make up` does not.
-  # Production setups usually point DB_HOST at an existing Postgres; docker-compose-example.yml ships one.
+  # PostgreSQL behind the "db" profile: `make db` starts it, `make up` does not. Skip it if you already have one.
   postgres:
     container_name: gamefleet-postgres
     image: postgres:16

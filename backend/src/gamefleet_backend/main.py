@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from importlib.metadata import version as package_version
 
 from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from .api import auth as auth_api, docker, games, servers
 from .auth import current_user, log_startup_state
@@ -32,14 +31,6 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 protected = [Depends(current_user)]
