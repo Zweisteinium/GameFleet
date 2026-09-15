@@ -7,6 +7,8 @@ VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' backend/pyproject.toml)
 BACKEND_IMAGE  = $(DOCKER_REPO)/gamefleet-backend
 FRONTEND_IMAGE = $(DOCKER_REPO)/gamefleet-frontend
 COMPOSE = DOCKER_REPO=$(DOCKER_REPO) VERSION=$(VERSION) docker compose
+# Includes the development database (profile "db") for targets that stop or inspect everything.
+COMPOSE_ALL = $(COMPOSE) --profile db
 
 .DEFAULT_GOAL := help
 .PHONY: help install backend frontend db check swagger hash up down restart logs ps shell build release clean
@@ -23,10 +25,8 @@ backend: ## Run the API with auto-reload on http://localhost:8000
 frontend: ## Run the SvelteKit dev server on http://localhost:3000
 	cd frontend && pnpm dev
 
-db: ## Start a local PostgreSQL 16 container for development (matches backend/.env defaults)
-	docker run -d --name gamefleet-postgres --restart unless-stopped \
-		-e POSTGRES_USER=gamefleet_user -e POSTGRES_PASSWORD=gamefleet_pass -e POSTGRES_DB=gamefleet_db \
-		-p 5432:5432 -v gamefleet-postgres:/var/lib/postgresql/data postgres:16
+db: ## Start the development PostgreSQL container (docker-compose.yml, profile db, DB_* from .env)
+	$(COMPOSE) --profile db up -d postgres
 
 check: ## Type-check and lint the frontend, import-check the backend
 	cd frontend && pnpm check && pnpm exec eslint .
@@ -43,17 +43,17 @@ hash: ## Print an scrypt hash for a GAMEFLEET_USERS password (prompts for it)
 up: ## Build and start backend + frontend in the background
 	$(COMPOSE) up -d --build
 
-down: ## Stop and remove the containers
-	$(COMPOSE) down
+down: ## Stop and remove the containers, including the development database (data is kept)
+	$(COMPOSE_ALL) down
 
 restart: ## Restart the containers
 	$(COMPOSE) restart
 
 logs: ## Follow logs of all services (make logs S=backend for one)
-	$(COMPOSE) logs -f $(S)
+	$(COMPOSE_ALL) logs -f $(S)
 
 ps: ## Show container status
-	$(COMPOSE) ps
+	$(COMPOSE_ALL) ps
 
 shell: ## Open a shell in the backend container
 	$(COMPOSE) exec backend /bin/bash
@@ -69,8 +69,9 @@ release: build ## Build, tag as latest and push both images to $(DOCKER_REPO)
 	docker push $(FRONTEND_IMAGE):$(VERSION)
 	docker push $(FRONTEND_IMAGE):latest
 
-clean: ## Stop containers and remove volumes (deletes the cached game artwork)
-	$(COMPOSE) down -v
+clean: ## Stop everything and delete the cached game artwork (the database volume is kept)
+	$(COMPOSE_ALL) down
+	docker volume rm -f gamefleet_gamefleet-assets
 
 help: ## Show this help
 	@echo "GameFleet $(VERSION)   (make [target] [DOCKER_REPO=user] [VERSION=tag])"

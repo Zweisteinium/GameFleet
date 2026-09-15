@@ -24,6 +24,8 @@ configuration, layout and make targets; this file holds only what is not obvious
 - Host stats are request-driven and cached (10 s for `stats`, 5 min for `du`); CPU% needs two samples, so the first
   request reports null. No background stats loop.
 - Backups/rollback are planned on top of `data_path`, `world_path` and `ContainerMount`; keep those fields populated.
+- All configuration comes from the root `.env` (loaded once in `gamefleet_backend/__init__.py`; containers get it from
+  compose). The backend builds its database URL from `DB_*`; `DATABASE_URL` is an override, there is no second env file.
 - Prettier is not applied repo-wide. Do not reformat files you are not otherwise changing.
 
 ## Adding a game
@@ -34,7 +36,7 @@ Follow the README steps, plus: popular Docker images go into `IMAGE_CATALOG` and
 
 ## Versioning
 
-One version in `backend/pyproject.toml` and `frontend/package.json` (currently 0.6.0). Bump it in the same commit as a
+One version in `backend/pyproject.toml` and `frontend/package.json` (currently 0.6.1). Bump it in the same commit as a
 user-visible change: patch for fixes and dependency updates, minor for features or UI changes, major for breaking API or
 DB changes. Docs and tooling commits need no bump. Run `uv lock` after touching `pyproject.toml`; commit both lockfiles.
 

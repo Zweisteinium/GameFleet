@@ -11,13 +11,10 @@ import tarfile
 import time
 from typing import Any, Optional
 
-from dotenv import load_dotenv
 import docker
 import docker.errors
 
 from gamefleet_backend.models.container_info import ContainerInfo, ContainerMount, HostStats, PortBinding
-
-load_dotenv()
 
 log = logging.getLogger(__name__)
 

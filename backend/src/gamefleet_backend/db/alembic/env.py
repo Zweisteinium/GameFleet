@@ -1,19 +1,14 @@
 from logging.config import fileConfig
-import os
-from dotenv import load_dotenv
-
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from sqlmodel import SQLModel
 
 from alembic import context
 
-# Load environment variables
-load_dotenv()
-
 # Import your models so they are registered with SQLModel
 from gamefleet_backend.db.models.game_server import GameServer  # noqa
 from gamefleet_backend.models.game_server_type import GameServerType  # noqa
+from gamefleet_backend.db.session import database_url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -28,11 +23,8 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 target_metadata = SQLModel.metadata
 
-# Set the database URL from environment variable
-# Use sync URL for migrations, fallback to async URL with psycopg2
-database_url = os.getenv("DATABASE_URL_SYNC") or os.getenv("DATABASE_URL", "").replace("+asyncpg", "+psycopg2")
-if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+# Alembic needs a sync driver; the URL comes from the same DB_* settings as the app.
+config.set_main_option("sqlalchemy.url", database_url("psycopg2").replace("+asyncpg", "+psycopg2"))
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
