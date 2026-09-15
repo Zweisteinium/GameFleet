@@ -39,7 +39,7 @@ Follow the README steps, plus: popular Docker images go into `IMAGE_CATALOG` and
 
 ## Versioning
 
-One version in `backend/pyproject.toml` and `frontend/package.json` (currently 0.7.0). Bump it in the same commit as a
+One version in `backend/pyproject.toml` and `frontend/package.json` (currently 0.7.1). Bump it in the same commit as a
 user-visible change: patch for fixes and dependency updates, minor for features or UI changes, major for breaking API or
 DB changes. Docs and tooling commits need no bump. Run `uv lock` after touching `pyproject.toml`; commit both lockfiles.
 

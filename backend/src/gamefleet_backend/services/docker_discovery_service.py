@@ -179,10 +179,26 @@ class DockerDiscoveryService:
             ):
                 server = await self.import_container(raw, detected)
                 log.info("Imported container %s as %s (%s)", info.name, detected.game.value, detected.confidence)
+            elif server and detected and detected.game == server.game:
+                await self._sync_endpoint(server, detected)
             results.append(DiscoveredContainer(
                 container=info, detected=detected, server_id=server.id if server else None, ignored=info.name in ignored
             ))
         return results
+
+    async def _sync_endpoint(self, server: GameServer, detected: DetectedGame) -> None:
+        """Follow the container when its reachable address or port mapping changed (compose edits, the backend
+        moving between host and bridge networking)."""
+        fields = {"address": detected.address, "port": detected.port, "query_port": detected.query_port,
+                  "rcon_port": detected.rcon_port}
+        changed = {k: v for k, v in fields.items() if getattr(server, k) != v}
+        if not changed:
+            return
+        for key, value in changed.items():
+            setattr(server, key, value)
+        self.session.add(server)
+        await self.session.commit()
+        log.info("Updated container %s: %s", server.container_name, ", ".join(f"{k}={v}" for k, v in changed.items()))
 
     async def import_container(self, raw: dict[str, Any], detected: Optional[DetectedGame] = None,
                                game: Optional[GameServerType] = None, name: Optional[str] = None) -> GameServer:
