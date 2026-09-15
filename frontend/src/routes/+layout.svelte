@@ -6,8 +6,7 @@
 	import { resolve } from '$app/paths';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import { API_BASE_URL } from '$lib/api/ApiService';
-	import { session, loggedIn, logout } from '$lib/auth.svelte';
+		import { session, loggedIn, logout } from '$lib/auth.svelte';
 
 	let { children } = $props();
 
@@ -57,9 +56,9 @@
 						Servers
 					</a>
 					<a
-						href="{API_BASE_URL}/swagger"
+						href="/swagger"
 						target="_blank"
-						rel="noreferrer"
+						rel="external noreferrer"
 						class="btn-ghost hidden h-9 px-3 text-sm sm:inline-flex"
 					>
 						API

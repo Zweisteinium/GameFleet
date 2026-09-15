@@ -2,8 +2,6 @@ import { Api } from './Api';
 import { session, clearSession } from '$lib/auth.svelte';
 
 class ApiService {
-	public static GAMEFLEET_API_URL = import.meta.env.GAMEFLEET_API_URL || 'http://localhost:8000';
-
 	private static instance: Api<unknown>;
 
 	private constructor() {}
@@ -11,7 +9,8 @@ class ApiService {
 	public static getInstance(): Api<unknown> {
 		if (!ApiService.instance) {
 			ApiService.instance = new Api<unknown>({
-				baseUrl: this.GAMEFLEET_API_URL,
+				// Same origin: the Node server and the Vite dev server proxy /api to the backend.
+				baseUrl: '',
 				customFetch: async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 					const headers = new Headers(init?.headers);
 					if (session.token) headers.set('Authorization', `Bearer ${session.token}`);
@@ -27,4 +26,3 @@ class ApiService {
 }
 
 export const api = ApiService.getInstance();
-export const API_BASE_URL = ApiService.GAMEFLEET_API_URL;

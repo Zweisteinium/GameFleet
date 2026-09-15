@@ -1,8 +1,7 @@
 [project]
 name = "gamefleet-backend"
-version = "0.6.1"
-description = "Placeholder :)"
-readme = ""
+version = "0.7.0"
+description = "GameFleet API: queries game servers with their native protocols and manages the dashboard data"
 requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.16.5",

@@ -18,7 +18,7 @@ from gamefleet_backend.models.container_info import ContainerInfo, ContainerMoun
 
 log = logging.getLogger(__name__)
 
-# Imported containers are queried through this address (the backend runs with host networking by default).
+# Imported containers are queried through this address (host.docker.internal from the backend container).
 SERVER_ADDRESS = os.getenv("DOCKER_SERVER_ADDRESS", "127.0.0.1")
 STATS_MIN_INTERVAL = float(os.getenv("DOCKER_STATS_INTERVAL", "10"))  # seconds between two stats samples
 SIZES_MIN_INTERVAL = float(os.getenv("DOCKER_SIZES_INTERVAL", "300"))  # `du` is the expensive part

@@ -53,7 +53,7 @@ Backups and rollback are planned on top of this: every imported server already r
 
 ## Quick start (Docker)
 
-You need Docker and a PostgreSQL database. The compose file runs the backend with host networking, so any Postgres reachable from the host works; `make db` starts one from the same compose file if you have none.
+You need Docker and a PostgreSQL database; `make db` starts one from the same compose file if you have none.
 
 ```bash
 git clone https://github.com/H3xaChad/GameFleet.git
@@ -64,11 +64,14 @@ make up                   # builds and starts backend + frontend in the backgrou
 ```
 
 - Dashboard: http://localhost:3000 (log in with a user from `GAMEFLEET_USERS`)
-- API docs: http://localhost:8000/swagger
+- API docs: http://localhost:8000/swagger (also proxied at http://localhost:3000/swagger)
+
+`FRONTEND_PORT` and `BACKEND_PORT` in `.env` are the only ports to set. The frontend forwards `/api` to the backend
+inside the compose network, so browsers on the LAN need nothing but the frontend port.
 
 The database schema is created and upgraded automatically when the backend starts. Game artwork is cached in the `gamefleet-assets` volume.
 
-Prebuilt images are published as `h3xachad/gamefleet-backend` and `h3xachad/gamefleet-frontend`; see `docker-compose-example.yml` for using them.
+Prebuilt images are published as `h3xachad/gamefleet-backend` and `h3xachad/gamefleet-frontend`: `docker compose pull && docker compose up -d` runs them without building.
 
 ## Configuration
 
@@ -76,16 +79,15 @@ One `.env` in the repository root configures everything: `docker-compose.yml` re
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `localhost`, `5432`, `gamefleet`, `gamefleet`, – | PostgreSQL connection; `make db` creates its database from the same values |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Postgres on this host, `5432`, `gamefleet`, `gamefleet`, – | PostgreSQL connection; `make db` creates its database from the same values. Empty `DB_HOST` means `localhost` natively and `host.docker.internal` in Docker |
 | `DATABASE_URL` | – | Full SQLAlchemy URL (`postgresql+asyncpg://...`) that overrides the `DB_*` values |
-| `BACKEND_PORT` | `8000` | Backend port (host network) |
-| `FRONTEND_PORT` | `3000` | Published frontend port |
-| `FRONTEND_TARGET` | `node-server` | `node-server` or `nginx-server` image variant |
+| `BACKEND_PORT` | `8000` | Published backend port (API and Swagger UI) |
+| `FRONTEND_PORT` | `3000` | Published frontend port; the frontend proxies `/api` to the backend |
 | `ASSET_CACHE_DIR` | `data/assets` | Where the backend stores downloaded game artwork |
 | `GAMEFLEET_USERS` | – | Login users, `name:password,name2:password2`. Passwords in plain text or scrypt hashes from `make hash` (`$` becomes `$$` in `.env`). Empty disables login. |
 | `GAMEFLEET_SECRET` | random per start | Signs login tokens (30 days, `GAMEFLEET_SESSION_HOURS`); set it so logins survive restarts |
 | `DOCKER_AUTO_IMPORT` | `true` | Import containers with known game-server images automatically |
-| `DOCKER_SERVER_ADDRESS` | `127.0.0.1` | Address imported containers are queried at (the LAN IP or `host.docker.internal` when the backend is not on the host network) |
+| `DOCKER_SERVER_ADDRESS` | `host.docker.internal` in Docker, `127.0.0.1` natively | Address imported containers are queried at |
 | `DOCKER_DISCOVERY_INTERVAL` | `60` | Seconds between background discovery runs, `0` disables |
 | `UV_LINK_MODE` | – | Set to `copy` if your uv cache and project live on different filesystems |
 
@@ -100,7 +102,7 @@ make backend        # API with auto-reload on http://localhost:8000
 make frontend       # SvelteKit dev server on http://localhost:3000
 ```
 
-`make check` runs svelte-check and ESLint on the frontend and import-checks the backend. `make swagger` regenerates `frontend/src/lib/api/Api.ts` from the running backend's OpenAPI schema; run it whenever you change API models. `GAMEFLEET_API_URL` at build time points the frontend at another backend (`GAMEFLEET_API_URL=http://localhost:8010 pnpm dev`).
+`make check` runs svelte-check and ESLint on the frontend and import-checks the backend. `make swagger` regenerates `frontend/src/lib/api/Api.ts` from the running backend's OpenAPI schema; run it whenever you change API models. The frontend proxies `/api`, `/swagger` and `/openapi.json` to `BACKEND_URL` (default `http://localhost:8000`), both in `pnpm dev` and in the Node server that the Docker image runs; `BACKEND_URL=http://localhost:8010 pnpm dev` targets a spare backend.
 
 Append `?theme=light` or `?theme=dark` to any URL to force a theme (useful for sharing links).
 
@@ -118,7 +120,7 @@ Games that speak A2S need no query code. Anything else gets a module in `backend
 backend/   FastAPI + SQLModel. api/ (routes), auth.py (users, tokens), services/ (live info, docker,
            discovery, assets), lib/query/ (one module per protocol), models/ (API models, game and
            container catalogs), db/
-frontend/  SvelteKit (static adapter) + Tailwind v4. lib/components/, routes/main, routes/server/[id]
+frontend/  SvelteKit (adapter-node, client-only, proxies /api) + Tailwind v4. lib/components/, routes/main, routes/server/[id]
 docs/      screenshots
 ```
 

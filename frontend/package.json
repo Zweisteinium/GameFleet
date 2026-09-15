@@ -1,7 +1,7 @@
 {
 	"name": "gamefleet-frontend",
 	"private": true,
-	"version": "0.6.1",
+	"version": "0.7.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev --port 3000",
@@ -14,12 +14,10 @@
 		"lint": "prettier --check . && eslint .",
 		"swagger": "swagger-typescript-api generate -p http://localhost:8000/openapi.json --output src/lib/api --module-name-index 2"
 	},
-	"dependencies": {
-		"@sfirew/minecraft-motd-parser": "^1.1.6"
-	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
-		"@sveltejs/adapter-static": "^3.0.10",
+		"@sfirew/minecraft-motd-parser": "^1.1.6",
+		"@sveltejs/adapter-node": "^5.5.7",
 		"@sveltejs/kit": "^2.70.3",
 		"@sveltejs/vite-plugin-svelte": "^7.3.0",
 		"@tailwindcss/vite": "^4.3.3",
@@ -39,5 +37,5 @@
 		"typescript-eslint": "^8.70.0",
 		"vite": "^8.3.0"
 	},
-	"packageManager": "pnpm@10.28.0"
+	"packageManager": "pnpm@12.4.2"
 }
