@@ -10,11 +10,8 @@ import logging
 import os
 from typing import Any, Optional
 
-from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-
-load_dotenv()
 
 from gamefleet_backend.db.models.game_server import GameServer, IgnoredContainer
 from gamefleet_backend.db.session import async_session

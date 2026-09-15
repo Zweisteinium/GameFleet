@@ -19,11 +19,8 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
-load_dotenv()
 
 log = logging.getLogger(__name__)
 

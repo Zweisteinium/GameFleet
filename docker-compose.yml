@@ -1,3 +1,5 @@
+name: gamefleet
+
 services:
   backend:
     container_name: gamefleet-backend
@@ -37,5 +39,22 @@ services:
     depends_on:
       - backend
 
+  # Development database behind the "db" profile: `make db` starts it, `make up` does not.
+  # Production setups usually point DB_HOST at an existing Postgres; docker-compose-example.yml ships one.
+  postgres:
+    container_name: gamefleet-postgres
+    image: postgres:16
+    profiles: [db]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-gamefleet}
+      POSTGRES_USER: ${DB_USER:-gamefleet}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - gamefleet-postgres:/var/lib/postgresql/data
+
 volumes:
   gamefleet-assets:
+  gamefleet-postgres:

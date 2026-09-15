@@ -53,20 +53,13 @@ Backups and rollback are planned on top of this: every imported server already r
 
 ## Quick start (Docker)
 
-You need Docker and a PostgreSQL database. The compose file runs the backend with host networking, so any Postgres reachable from the host works. To run one alongside:
-
-```bash
-docker run -d --name gamefleet-postgres --restart unless-stopped \
-  -e POSTGRES_USER=gamefleet_user -e POSTGRES_PASSWORD=changeme -e POSTGRES_DB=gamefleet_db \
-  -p 5432:5432 -v gamefleet-postgres:/var/lib/postgresql/data postgres:16
-```
-
-Then:
+You need Docker and a PostgreSQL database. The compose file runs the backend with host networking, so any Postgres reachable from the host works; `make db` starts one from the same compose file if you have none.
 
 ```bash
 git clone https://github.com/H3xaChad/GameFleet.git
 cd GameFleet
-cp .env.example .env      # set DB_PASSWORD (and anything else you want to change)
+cp .env.example .env      # set DB_PASSWORD and GAMEFLEET_USERS (and anything else you want to change)
+make db                   # optional: PostgreSQL 16 container using the DB_* values from .env
 make up                   # builds and starts backend + frontend in the background
 ```
 
@@ -79,11 +72,12 @@ Prebuilt images are published as `h3xachad/gamefleet-backend` and `h3xachad/game
 
 ## Configuration
 
-`.env` in the repository root (used by `docker-compose.yml`):
+One `.env` in the repository root configures everything: `docker-compose.yml` reads it, and the backend loads it when run natively. Real environment variables take precedence.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `localhost`, `5432`, `gamefleet_db`, `gamefleet_user`, – | PostgreSQL connection |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `localhost`, `5432`, `gamefleet`, `gamefleet`, – | PostgreSQL connection; `make db` creates its database from the same values |
+| `DATABASE_URL` | – | Full SQLAlchemy URL (`postgresql+asyncpg://...`) that overrides the `DB_*` values |
 | `BACKEND_PORT` | `8000` | Backend port (host network) |
 | `FRONTEND_PORT` | `3000` | Published frontend port |
 | `FRONTEND_TARGET` | `node-server` | `node-server` or `nginx-server` image variant |
@@ -95,15 +89,13 @@ Prebuilt images are published as `h3xachad/gamefleet-backend` and `h3xachad/game
 | `DOCKER_DISCOVERY_INTERVAL` | `60` | Seconds between background discovery runs, `0` disables |
 | `UV_LINK_MODE` | – | Set to `copy` if your uv cache and project live on different filesystems |
 
-`backend/.env` (used when running the backend natively): `DATABASE_URL` (asyncpg URL), `DATABASE_URL_SYNC` (psycopg2 URL, only for Alembic) and optionally the `GAMEFLEET_*` / `DOCKER_*` variables above.
-
 ## Development
 
 Prerequisites: [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io/), Docker (for Postgres), Python 3.14, Node 24. uv downloads Python 3.14 automatically if it is missing; the pnpm version is pinned in `package.json` (corepack).
 
 ```bash
 make install        # uv sync + pnpm install
-make db             # local PostgreSQL 16 container (or use any Postgres; adjust backend/.env)
+make db             # PostgreSQL 16 container with the DB_* values from .env (or point .env at any Postgres)
 make backend        # API with auto-reload on http://localhost:8000
 make frontend       # SvelteKit dev server on http://localhost:3000
 ```
@@ -132,7 +124,7 @@ docs/      screenshots
 
 ## Make targets
 
-`make help` lists everything. Native development: `install`, `db`, `backend`, `frontend`, `check`, `swagger`, `hash` (password hash for `GAMEFLEET_USERS`). Docker: `up`, `down`, `restart`, `logs` (`S=backend` for one service), `ps`, `shell`, `build`, `release` (build, tag and push both images to `DOCKER_REPO`, default `h3xachad`), `clean`.
+`make help` lists everything. Native development: `install`, `db`, `backend`, `frontend`, `check`, `swagger`, `hash` (password hash for `GAMEFLEET_USERS`). Docker: `up`, `down`, `restart`, `logs` (`S=backend` for one service), `ps`, `shell`, `build`, `release` (build, tag and push both images to `DOCKER_REPO`, default `h3xachad`), `clean` (also deletes the artwork cache; the database volume is kept).
 
 Images are tagged with the project version from `backend/pyproject.toml`; override with `make release VERSION=x.y.z`.
 
