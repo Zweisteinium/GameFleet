@@ -626,6 +626,8 @@ export interface SessionInfo {
   username?: string | null;
   /** Admin */
   admin: boolean;
+  /** Dev */
+  dev: boolean;
 }
 
 /**

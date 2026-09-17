@@ -6,8 +6,9 @@ registration. A password may be given in plain text or as an scrypt hash produce
 (HMAC over ``user|expiry``), so nothing about sessions is stored in the database.
 
 Visitors without a token are in public mode: they see the servers flagged ``is_public`` and nothing that
-changes or reveals the host (see ``is_admin``). If no users are configured, authentication is disabled and
-every endpoint is open; the API says so in ``/api/auth/me`` and the frontend shows a warning.
+changes or reveals the host (see ``is_admin``). If no users are configured, nobody can log in: in development
+mode every endpoint is then open to everyone, in production the dashboard stays read-only. The API says so in
+``/api/auth/me`` and the frontend shows a warning.
 """
 import base64
 import hashlib
@@ -22,6 +23,8 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from gamefleet_backend.settings import DEV
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +74,8 @@ def _load_users() -> dict[str, str]:
 
 USERS = _load_users()
 AUTH_ENABLED = bool(USERS)
+# Without users nobody can log in. Only a development setup treats everyone as an admin then.
+OPEN_ACCESS = not AUTH_ENABLED and DEV
 
 _secret = os.getenv("GAMEFLEET_SECRET")
 SECRET_GENERATED = not _secret
@@ -79,8 +84,10 @@ SECRET = (_secret or secrets.token_urlsafe(32)).encode()
 
 def log_startup_state() -> None:
     """Called once by the app on startup (not at import, so the CLI below stays quiet)."""
-    if not AUTH_ENABLED:
+    if OPEN_ACCESS:
         log.warning("GAMEFLEET_USERS is not set: the dashboard and API are open to anyone who can reach them")
+    elif not AUTH_ENABLED:
+        log.error("GAMEFLEET_USERS is not set: nobody can log in, the dashboard is read-only until users are configured")
     elif SECRET_GENERATED:
         log.warning("GAMEFLEET_SECRET is not set; logins will not survive a backend restart")
     else:
@@ -145,14 +152,14 @@ async def optional_user(credentials: HTTPAuthorizationCredentials | None = Depen
 
 
 async def is_admin(user: Optional[User] = Depends(optional_user)) -> bool:
-    """Whether the caller may see and change everything: any logged-in user, or everyone while
-    authentication is disabled."""
-    return not AUTH_ENABLED or user is not None
+    """Whether the caller may see and change everything: any logged-in user, or everyone in a development
+    setup without users."""
+    return OPEN_ACCESS or user is not None
 
 
 async def current_user(user: Optional[User] = Depends(optional_user)) -> Optional[User]:
-    """Require a login. Returns None only when authentication is disabled."""
-    if AUTH_ENABLED and user is None:
+    """Require a login. Returns None only for the open access of a development setup without users."""
+    if user is None and not OPEN_ACCESS:
         raise _unauthorized()
     return user
 

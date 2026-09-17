@@ -68,7 +68,7 @@ make up                   # builds and starts backend + frontend in the backgrou
 ```
 
 - Dashboard: http://localhost:3000 (public view; sign in with a user from `GAMEFLEET_USERS` to manage servers)
-- API docs: http://localhost:8000/swagger (also proxied at http://localhost:3000/swagger)
+- API docs: http://localhost:8000/swagger, only with `GAMEFLEET_ENV=dev` (also proxied at http://localhost:3000/swagger)
 
 `FRONTEND_PORT` and `BACKEND_PORT` in `.env` are the only ports to set. The frontend forwards `/api` to the backend
 inside the compose network, so browsers on the LAN need nothing but the frontend port.
@@ -83,12 +83,13 @@ One `.env` in the repository root configures everything: `docker-compose.yml` re
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
+| `GAMEFLEET_ENV` | `prod` | `dev` serves the API docs (`/swagger`, `/redoc`, `/openapi.json`), logs verbosely, opens a dashboard without users to everyone and shows a development banner. `make backend` always runs in dev mode |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Postgres on this host, `5432`, `gamefleet`, `gamefleet`, – | PostgreSQL connection; `make db` creates its database from the same values. Empty `DB_HOST` means `localhost` natively and `host.docker.internal` in Docker |
 | `DATABASE_URL` | – | Full SQLAlchemy URL (`postgresql+asyncpg://...`) that overrides the `DB_*` values |
-| `BACKEND_PORT` | `8000` | Published backend port (API and Swagger UI) |
+| `BACKEND_PORT` | `8000` | Published backend port (API, plus the Swagger UI in dev mode) |
 | `FRONTEND_PORT` | `3000` | Published frontend port; the frontend proxies `/api` to the backend |
 | `ASSET_CACHE_DIR` | `data/assets` | Where the backend stores downloaded game artwork |
-| `GAMEFLEET_USERS` | – | Login users, `name:password,name2:password2`. Passwords in plain text or scrypt hashes from `make hash` (`$` becomes `$$` in `.env`). Without a login, visitors only see servers marked public. Empty disables login and makes everyone an admin. |
+| `GAMEFLEET_USERS` | – | Login users, `name:password,name2:password2`. Passwords in plain text or scrypt hashes from `make hash` (`$` becomes `$$` in `.env`). Without a login, visitors only see servers marked public. Empty means nobody can sign in: read-only in prod, open to everyone in dev. |
 | `GAMEFLEET_SECRET` | random per start | Signs login tokens (30 days, `GAMEFLEET_SESSION_HOURS`); set it so logins survive restarts |
 | `DOCKER_SERVER_ADDRESS` | `host.docker.internal` in Docker, `127.0.0.1` natively | Address imported containers are queried at |
 | `DOCKER_DISCOVERY_INTERVAL` | `60` | Seconds between background discovery runs, `0` disables |
@@ -105,7 +106,7 @@ make backend        # API with auto-reload on http://localhost:8000
 make frontend       # SvelteKit dev server on http://localhost:3000
 ```
 
-`make check` runs svelte-check and ESLint on the frontend and import-checks the backend. `make swagger` regenerates `frontend/src/lib/api/Api.ts` from the running backend's OpenAPI schema; run it whenever you change API models. The frontend proxies `/api`, `/swagger` and `/openapi.json` to `BACKEND_URL` (default `http://localhost:8000`), both in `pnpm dev` and in the Node server that the Docker image runs; `BACKEND_URL=http://localhost:8010 pnpm dev` targets a spare backend.
+`make check` runs svelte-check and ESLint on the frontend and import-checks the backend. `make swagger` regenerates `frontend/src/lib/api/Api.ts` from the OpenAPI schema of the running dev backend (`make backend`; the schema is not served in prod); run it whenever you change API models. The frontend proxies `/api`, `/swagger` and `/openapi.json` to `BACKEND_URL` (default `http://localhost:8000`), both in `pnpm dev` and in the Node server that the Docker image runs; `BACKEND_URL=http://localhost:8010 pnpm dev` targets a spare backend.
 
 Append `?theme=light` or `?theme=dark` to any URL to force a theme (useful for sharing links).
 

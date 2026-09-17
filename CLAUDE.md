@@ -19,6 +19,11 @@ configuration, layout and make targets; this file holds only what is not obvious
 - The browser talks to one origin: `hooks.server.ts` (Node server) and the Vite dev proxy forward `/api`, `/swagger`
   and `/openapi.json` to `BACKEND_URL`, so the API needs no CORS and the bundle contains no backend address. All
   ports and hosts come from `.env` through compose; nothing is baked into the images.
+- `GAMEFLEET_ENV` (`settings.DEV`, default prod) gates what only development needs: the docs and OpenAPI routes,
+  debug logging, and open access when no users are configured (prod is read-only then). `/api/auth/me` reports
+  `dev` and `admin`; the frontend takes both from there instead of deriving them. `make backend` forces dev.
+- Confirmations go through `confirmDialog()` (`lib/confirm.svelte.ts`, rendered once in the root layout); do not
+  use `window.confirm`.
 - Auth is a stateless HMAC bearer token kept in localStorage. `/api/games` stays public so `<img>` can load artwork.
 - Public mode is the default: without a token the servers router returns only `is_public` servers, projected through
   `VISITOR_VIEW` (no RCON, source, container or paths), and hidden servers answer 404. Writes, host stats, power and
@@ -45,7 +50,7 @@ Follow the README steps, plus: popular Docker images go into `IMAGE_CATALOG` and
 
 ## Versioning
 
-One version in `backend/pyproject.toml` and `frontend/package.json` (currently 0.8.0). Bump it in the same commit as a
+One version in `backend/pyproject.toml` and `frontend/package.json` (currently 0.9.0). Bump it in the same commit as a
 user-visible change: patch for fixes and dependency updates, minor for features or UI changes, major for breaking API or
 DB changes. Docs and tooling commits need no bump. Run `uv lock` after touching `pyproject.toml`; commit both lockfiles.
 
@@ -61,7 +66,7 @@ DB changes. Docs and tooling commits need no bump. Run `uv lock` after touching 
 
 Run `make check` and `cd frontend && pnpm build` before declaring work done; report failures verbatim.
 
-Backend smoke test: `cd backend && GAMEFLEET_USERS=admin:secret uv run uvicorn gamefleet_backend.main:app --port 8010`,
+Backend smoke test: `cd backend && GAMEFLEET_ENV=dev GAMEFLEET_USERS=admin:secret uv run uvicorn gamefleet_backend.main:app --port 8010`,
 log in via `POST /api/auth/login`, then call `/api/servers`, `/api/servers/live-info`, `/api/docker/discovered` and
 `/api/servers/host-stats` with the bearer token, and `/api/servers` without one for the public view. The dev database comes from `make db`; the frontend targets the spare
 backend with `BACKEND_URL=http://localhost:8010 pnpm dev --port 3010`.

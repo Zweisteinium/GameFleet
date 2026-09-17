@@ -19,8 +19,8 @@ install: ## Install backend (uv) and frontend (pnpm) dependencies
 	cd backend && uv sync
 	cd frontend && pnpm install
 
-backend: ## Run the API with auto-reload on http://localhost:8000
-	cd backend && uv run uvicorn gamefleet_backend.main:app --reload --host 127.0.0.1 --port 8000
+backend: ## Run the API in dev mode (docs at /swagger) with auto-reload on http://localhost:8000
+	cd backend && GAMEFLEET_ENV=dev uv run uvicorn gamefleet_backend.main:app --reload --host 127.0.0.1 --port 8000
 
 frontend: ## Run the SvelteKit dev server on http://localhost:3000
 	cd frontend && pnpm dev
@@ -32,7 +32,7 @@ check: ## Type-check and lint the frontend, import-check the backend
 	cd frontend && pnpm check && pnpm exec eslint .
 	cd backend && uv run python -c "import gamefleet_backend.main"
 
-swagger: ## Regenerate frontend/src/lib/api from the running backend's OpenAPI schema
+swagger: ## Regenerate frontend/src/lib/api from the running dev backend's OpenAPI schema (make backend)
 	cd frontend && pnpm swagger
 
 hash: ## Print an scrypt hash for a GAMEFLEET_USERS password (prompts for it)

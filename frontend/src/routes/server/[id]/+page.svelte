@@ -23,6 +23,7 @@
 	import ServerProperties from '$lib/components/ServerProperties.svelte';
 	import HostPanel from '$lib/components/HostPanel.svelte';
 	import { loggedIn } from '$lib/auth.svelte';
+	import { confirmDialog } from '$lib/confirm.svelte';
 	import GameArt from '$lib/components/GameArt.svelte';
 	import PlayersBar from '$lib/components/PlayersBar.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -79,8 +80,14 @@
 			const holders = detail?.conflicts ?? [];
 			if (!holders.length || !holders.every((c) => c.server_id)) throw err;
 			const names = holders.map((c) => `"${c.server_name}"`).join(' and ');
-			const question = `${detail?.message}\n\nStop ${names} and start "${server.name}"? Players there will be disconnected.`;
-			if (!confirm(question)) return;
+			const stopOthers = await confirmDialog({
+				title: 'Port already in use',
+				message: `${detail?.message} Stop ${names} and start "${server.name}" instead?`,
+				note: 'Players on the stopped server will be disconnected.',
+				confirmLabel: 'Stop and start',
+				tone: 'danger'
+			});
+			if (!stopOthers) return;
 			live.host[server.id] = (
 				await api.serverId.powerServer(server.id, { action, stop_conflicting: true })
 			).data;
@@ -92,8 +99,14 @@
 
 	async function deleteServer() {
 		if (!server) return;
-		const note = isLocal ? ' The container itself is left untouched.' : '';
-		if (!confirm(`Remove "${server.name}" from GameFleet?${note}`)) return;
+		const remove = await confirmDialog({
+			title: 'Remove server',
+			message: `Remove "${server.name}" from GameFleet?`,
+			note: isLocal ? 'The container itself is left untouched.' : undefined,
+			confirmLabel: 'Remove',
+			tone: 'danger'
+		});
+		if (!remove) return;
 		try {
 			await api.serverId.deleteServer(server.id);
 			forgetServer(server.id);
