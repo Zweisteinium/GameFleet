@@ -2,7 +2,8 @@
 
 A container becomes a GameFleet server with ``source = "docker"`` and ``container_name`` set. The name
 is the link (compose keeps it across recreations, the id does not). Nothing is imported on its own:
-the user imports single containers, or all running ones that carry ``gamefleet.*`` labels or a known image.
+the user imports single containers, or all running ones with a known image. Everything is read from the
+container itself (image, ports, environment, mounts); GameFleet defines no container labels.
 """
 import asyncio
 import logging
@@ -14,9 +15,10 @@ from sqlmodel import select
 
 from gamefleet_backend.db.models.game_server import GameServer, IgnoredContainer
 from gamefleet_backend.db.session import async_session
-from gamefleet_backend.models.container_catalog import LABELS, lookup_image, lookup_keyword, NEVER
+from gamefleet_backend.models.container_catalog import lookup_image, lookup_keyword, NEVER
 from gamefleet_backend.models.container_info import ContainerInfo, DetectedGame, DiscoveredContainer
 from gamefleet_backend.models.game_server_type import GAME_CATALOG, GameServerType, QueryProtocol
+from gamefleet_backend.services import modpack_service
 from gamefleet_backend.services.docker_service import (
     DockerUnavailable, SERVER_ADDRESS, container_ip, docker_service, map_container, network_mode,
 )
@@ -25,23 +27,7 @@ log = logging.getLogger(__name__)
 
 DISCOVERY_INTERVAL = float(os.getenv("DOCKER_DISCOVERY_INTERVAL", "60"))  # seconds; 0 disables the loop
 # Detections that "import all" trusts; name and port guesses are imported one by one after a look.
-CERTAIN_CONFIDENCE = {"label", "image"}
-
-
-def _label_int(labels: dict[str, str], key: str) -> Optional[int]:
-    value = labels.get(LABELS[key])
-    return int(value) if value and value.isdigit() else None
-
-
-def _game_from_labels(labels: dict[str, str]) -> Optional[GameServerType]:
-    value = labels.get(LABELS["game"])
-    if not value:
-        return None
-    try:
-        return GameServerType(value.strip().lower())
-    except ValueError:
-        log.warning("Container label %s=%r is not a known game", LABELS["game"], value)
-        return None
+CERTAIN_CONFIDENCE = {"image"}
 
 
 def _game_from_ports(info: ContainerInfo) -> Optional[GameServerType]:
@@ -50,21 +36,18 @@ def _game_from_ports(info: ContainerInfo) -> Optional[GameServerType]:
     return matches[0] if len(matches) == 1 else None
 
 
-def detect(raw: dict[str, Any]) -> Optional[DetectedGame]:
-    """Fingerprint one container (list representation). None when it does not look like a game server."""
+def detect(raw: dict[str, Any], game: Optional[GameServerType] = None) -> Optional[DetectedGame]:
+    """Fingerprint one container (list representation). None when it does not look like a game server.
+    `game` is the user's choice (at import, or the game of the linked server) and overrides the guess."""
     info = map_container(raw)
-    labels = info.labels
-    if labels.get(LABELS["ignore"], "").lower() == "true":
-        return None
     if NEVER.search(info.image) or NEVER.search(info.name):
         return None
 
     reasons: list[str] = []
     fingerprint = lookup_image(info.image)
-    game = _game_from_labels(labels)
-    if game:
-        confidence = "label"
-        reasons.append(f"label {LABELS['game']}={game.value}")
+    if game and not (fingerprint and fingerprint.game == game):
+        confidence = "manual"
+        reasons.append("game chosen by the user")
     elif fingerprint:
         game, confidence = fingerprint.game, "image"
         reasons.append(f"known image {info.image}")
@@ -79,14 +62,14 @@ def detect(raw: dict[str, Any]) -> Optional[DetectedGame]:
 
     spec = GAME_CATALOG[game]
     if fingerprint and fingerprint.game != game:
-        fingerprint = None  # the label overrides the image; do not mix in the image's paths
+        fingerprint = None  # the user's choice overrides the image; do not mix in the image's paths
 
-    # Ports inside the container: label > image knowledge > game defaults.
-    port = _label_int(labels, "port") or (fingerprint.port if fingerprint else None) or spec.default_port
-    query_port = _label_int(labels, "query_port") or (fingerprint.query_port if fingerprint else None)
+    # Ports inside the container: image knowledge, else the game's defaults.
+    port = (fingerprint.port if fingerprint else None) or spec.default_port
+    query_port = fingerprint.query_port if fingerprint else None
     if query_port is None and spec.protocol == QueryProtocol.a2s:
         query_port = spec.resolve_query_port(port, None)
-    rcon_port = _label_int(labels, "rcon_port") or (fingerprint.rcon_port if fingerprint else None) or spec.default_rcon_port
+    rcon_port = (fingerprint.rcon_port if fingerprint else None) or spec.default_rcon_port
 
     # Translate to what is reachable from the host. The game port (and the query/RCON port when the
     # protocol depends on it) must be reachable; an unpublished optional RCON port is simply dropped.
@@ -110,13 +93,11 @@ def detect(raw: dict[str, Any]) -> Optional[DetectedGame]:
     else:
         address, mapped = SERVER_ADDRESS, {p: published.get(p, p) for p in wanted}
 
-    has_password = any(labels.get(LABELS[k]) for k in ("rcon_password", "rcon_password_env", "rcon_password_file")) or bool(
-        fingerprint and (fingerprint.rcon_password_env or fingerprint.rcon_password_file)
-    )
-    data_path = labels.get(LABELS["data_path"]) or (fingerprint.data_path if fingerprint else None)
+    has_password = bool(fingerprint and (fingerprint.rcon_password_env or fingerprint.rcon_password_file))
+    data_path = fingerprint.data_path if fingerprint else None
     if not data_path and info.mounts:
         data_path = info.mounts[0].destination
-    world_path = labels.get(LABELS["world_path"]) or (fingerprint.world_path if fingerprint else None)
+    world_path = fingerprint.world_path if fingerprint else None
 
     return DetectedGame(
         game=game,
@@ -129,21 +110,19 @@ def detect(raw: dict[str, Any]) -> Optional[DetectedGame]:
         has_rcon_password=has_password,
         data_path=data_path,
         world_path=world_path,
-        name=labels.get(LABELS["name"]) or info.name,
+        name=info.name,
     )
 
 
-async def resolve_rcon_password(name: str, labels: dict[str, str], image: str) -> Optional[str]:
-    """Label value, else the container's environment variable, else a file inside the container."""
-    if direct := labels.get(LABELS["rcon_password"]):
-        return direct
+async def resolve_rcon_password(name: str, image: str) -> Optional[str]:
+    """The container's environment variable, else a file inside the container, as the image is known to use."""
     fingerprint = lookup_image(image)
-    env_name = labels.get(LABELS["rcon_password_env"]) or (fingerprint.rcon_password_env if fingerprint else None)
+    env_name = fingerprint.rcon_password_env if fingerprint else None
     if env_name:
         env = await docker_service.env(name)
         if value := env.get(env_name):
             return value
-    file_path = labels.get(LABELS["rcon_password_file"]) or (fingerprint.rcon_password_file if fingerprint else None)
+    file_path = fingerprint.rcon_password_file if fingerprint else None
     if file_path:
         content = await docker_service.read_file(name, file_path)
         if content and content.strip():
@@ -152,6 +131,9 @@ async def resolve_rcon_password(name: str, labels: dict[str, str], image: str) -
 
 
 class DockerDiscoveryService:
+    # container id -> pack named by its environment (None for no pack); shared by all instances.
+    _modpacks: dict[str, Optional[modpack_service.Modpack]] = {}
+
     def __init__(self, session: AsyncSession):
         self.session = session
 
@@ -170,13 +152,15 @@ class DockerDiscoveryService:
         for raw in raw_containers:
             raw = await docker_service.complete(raw)
             info = map_container(raw)
-            detected = detect(raw)
             server = linked.get(info.name)
+            detected = detect(raw, GameServerType(server.game) if server else None)
             if detected is None and server is None:
                 continue
             # A container without published ports is reached at its own address, which only exists while it runs.
             if server and detected and detected.game == server.game and info.state == "running":
                 await self._sync_endpoint(server, detected)
+            if server:
+                await self._sync_modpack(server, info.id)
             results.append(DiscoveredContainer(
                 container=info, detected=detected, server_id=server.id if server else None, ignored=info.name in ignored
             ))
@@ -210,23 +194,45 @@ class DockerDiscoveryService:
         await self.session.commit()
         log.info("Updated container %s: %s", server.container_name, ", ".join(f"{k}={v}" for k, v in changed.items()))
 
+    async def _sync_modpack(self, server: GameServer, container_id: str) -> None:
+        """Keep the detected modpack of a Minecraft server current. The environment is fixed for the life of a
+        container, so each container id is looked at once; a pack typed into the form is left alone."""
+        if server.game != GameServerType.minecraft or server.modpack_source == "manual":
+            return
+        if container_id not in self._modpacks:
+            try:
+                self._modpacks[container_id] = modpack_service.from_env(await docker_service.env(server.container_name))
+            except Exception as exc:  # Docker hiccup: try again on the next run
+                log.warning("Could not read the modpack of %s: %s", server.container_name, exc)
+                return
+        pack = self._modpacks[container_id]
+        # The Modrinth side keeps its own cache and retries failures, so a lookup that was down heals itself.
+        fields = modpack_service.as_fields(await modpack_service.resolve(pack) if pack else None)
+        if server.modpack_icon and not fields["modpack_icon"] and fields["modpack_version"] == server.modpack_version \
+                and pack and (pack.modrinth_id or pack.source == "file"):
+            return  # Modrinth is unreachable right now: keep the title, link and icon it gave us earlier
+        changed = {k: v for k, v in fields.items() if getattr(server, k) != v}
+        if changed:
+            for key, value in changed.items():
+                setattr(server, key, value)
+            self.session.add(server)
+            await self.session.commit()
+            log.info("Modpack of %s: %s", server.container_name, fields["modpack_name"] or "none")
+
     async def import_container(self, raw: dict[str, Any], detected: Optional[DetectedGame] = None,
                                game: Optional[GameServerType] = None, name: Optional[str] = None) -> GameServer:
         """Create (or re-sync) the GameFleet server for a container."""
         raw = await docker_service.complete(raw)
         info = map_container(raw)
-        detected = detected or detect(raw)
-        if game and (detected is None or detected.game != game):
-            # The user picked a different game than detected: re-run detection as if it were labelled.
-            raw = {**raw, "Labels": {**(raw.get("Labels") or {}), LABELS["game"]: game.value}}
-            detected = detect(raw)
+        if detected is None or (game and detected.game != game):
+            detected = detect(raw, game)
         if detected is None:
             raise ValueError("Container does not look like a supported game server")
 
         password = None
         if detected.has_rcon_password:
             try:
-                password = await resolve_rcon_password(info.name, info.labels, info.image)
+                password = await resolve_rcon_password(info.name, info.image)
             except Exception as exc:
                 log.warning("Could not read the RCON password of %s: %s", info.name, exc)
 
@@ -249,6 +255,7 @@ class DockerDiscoveryService:
         await self.session.execute(IgnoredContainer.__table__.delete().where(IgnoredContainer.container_name == info.name))
         await self.session.commit()
         await self.session.refresh(server)
+        await self._sync_modpack(server, info.id)
         return server
 
     async def set_ignored(self, container_name: str, ignored: bool) -> None:

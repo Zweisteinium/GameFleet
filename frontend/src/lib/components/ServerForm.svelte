@@ -31,6 +31,8 @@
 	let rconPort = $state<number | null>(seed?.rcon_port ?? null);
 	let rconPassword = $state('');
 	let isPublic = $state(seed?.is_public ?? false);
+	let modpackName = $state(seed?.modpack_name ?? '');
+	let modpackUrl = $state(seed?.modpack_url ?? '');
 	let saving = $state(false);
 	let error = $state<string | null>(null);
 
@@ -66,6 +68,9 @@
 				query_port: queryPort || null,
 				rcon_port: rconPort || null,
 				is_public: isPublic,
+				...(game === GameServerType.Minecraft
+					? { modpack_name: modpackName.trim(), modpack_url: modpackUrl.trim() }
+					: {}),
 				...(rconPassword ? { rcon_password: rconPassword } : {})
 			};
 			const response = initial
@@ -200,6 +205,45 @@
 				{:else}
 					Public and Nitrado servers are found automatically. RCON is only needed for private
 					servers.
+				{/if}
+			</p>
+		</div>
+	{/if}
+
+	{#if game === GameServerType.Minecraft}
+		<div class="grid gap-3 sm:grid-cols-2">
+			<div>
+				<label class="label" for="sf-pack"
+					>Modpack <span class="text-ink-3 normal-case">· optional</span></label
+				>
+				<input
+					id="sf-pack"
+					class="input"
+					type="text"
+					bind:value={modpackName}
+					maxlength="200"
+					placeholder="All the Mods 9"
+				/>
+			</div>
+			<div>
+				<label class="label" for="sf-pack-url"
+					>Modpack link <span class="text-ink-3 normal-case">· optional</span></label
+				>
+				<input
+					id="sf-pack-url"
+					class="input"
+					type="url"
+					bind:value={modpackUrl}
+					maxlength="500"
+					placeholder="found on Modrinth if empty"
+				/>
+			</div>
+			<p class="text-ink-3 text-xs sm:col-span-2">
+				{#if seed?.source === 'docker'}
+					Read from the container on its own. Change it to set your own; clear the name to detect it
+					again.
+				{:else}
+					Without a link, GameFleet looks for a modpack with exactly this name on Modrinth.
 				{/if}
 			</p>
 		</div>

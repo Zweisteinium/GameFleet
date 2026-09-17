@@ -83,7 +83,8 @@
 				{server.name}{@render hostChip()}
 			</h3>
 			<p class="text-ink-2 truncate text-xs">
-				{gameLabel(server.game)} · {server.address}:{server.port}
+				{gameLabel(server.game)}{#if server.modpack_name}
+					· {server.modpack_name}{/if} · {server.address}:{server.port}
 			</p>
 		</div>
 		<div class="text-ink-2 hidden items-center gap-4 text-xs md:flex">
@@ -145,7 +146,8 @@
 					{/if}
 				</div>
 				<p class="text-ink-2 mb-3 flex items-center gap-2 text-xs font-medium">
-					{gameLabel(server.game)}{@render hostChip()}
+					{gameLabel(server.game)}{#if server.modpack_name}
+						<span class="truncate" title="Modpack">· {server.modpack_name}</span>{/if}{@render hostChip()}
 				</p>
 
 				{#if loading}

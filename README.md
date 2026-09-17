@@ -41,15 +41,16 @@ The **port** of a server is always the port players connect to. The query port a
 
 ## Servers in Docker on the same host
 
-With the Docker socket mounted into the backend (the compose files do this), GameFleet looks at every container on the host and recognises game servers in three ways, most reliable first:
+With the Docker socket mounted into the backend (the compose files do this), GameFleet looks at every container on the host and recognises game servers from what they already are, most reliable first (there are no GameFleet labels to add or maintain):
 
-1. **Labels** on the container are authoritative: `gamefleet.game=factorio` is enough; `gamefleet.name`, `gamefleet.port`, `gamefleet.query_port`, `gamefleet.rcon_port`, `gamefleet.rcon_password` / `gamefleet.rcon_password_env` / `gamefleet.rcon_password_file`, `gamefleet.data_path` and `gamefleet.world_path` refine it, `gamefleet.ignore=true` hides a container.
-2. **Known images** (`itzg/minecraft-server`, `factoriotools/factorio`, `lloesche/valheim-server`, `thijsvanloef/palworld-server-docker`, `wolveix/satisfactory-server`, `cm2network/*` and more, see `models/container_catalog.py`) are recognised with certainty. The catalog also knows where each image keeps its data and how it is given its RCON password, so a Factorio or Minecraft container needs no configuration at all.
-3. **Names and ports** only produce a suggestion: a container called `my-valheim` or one that exposes 34197/udp shows up in the "Containers on this host" panel with a game dropdown and an Import button.
+1. **Known images** (`itzg/minecraft-server`, `factoriotools/factorio`, `lloesche/valheim-server`, `thijsvanloef/palworld-server-docker`, `wolveix/satisfactory-server`, `cm2network/*` and more, see `models/container_catalog.py`) are recognised with certainty. The catalog also knows where each image keeps its data and how it is given its RCON password, so a Factorio or Minecraft container needs no configuration at all.
+2. **Names and ports** only produce a suggestion: a container called `my-valheim` or one that exposes 34197/udp shows up in the "Containers on this host" panel with a game dropdown and an Import button.
 
-Nothing is imported on its own. **Import from Docker** on the dashboard (signed in) takes every running container from the first two groups at once; the panel imports single containers, including stopped ones and guesses. Stopped containers are left out of the bulk import because several of them may claim the same host port, and a linked server whose container is not running is shown as offline instead of being queried.
+Nothing is imported on its own. **Import from Docker** on the dashboard (signed in) takes every running container with a known image at once; the panel imports single containers, including stopped ones and guesses. Stopped containers are left out of the bulk import because several of them may claim the same host port, and a linked server whose container is not running is shown as offline instead of being queried.
 
 Hosts with many instances of one game are the normal case: a compose directory per server, most of them stopped, all on the game's default port. Stopped containers are read through their configured port bindings, an image whose tag moved on to a newer pull is resolved to its name, and the panels show each container's compose directory. Starting a server whose host port is held by another running server asks whether to stop that one first; a port held by a container that is not in the fleet, or by a process on the host, is reported and nothing is stopped. GameFleet only sees containers that exist: a compose project that was taken `down` has none until it is created again with `docker compose up --no-start` or `up -d`.
+
+**Modpacks** of Minecraft servers are read from the container as well: the `itzg/minecraft-server` variables name the pack (`MODRINTH_MODPACK`, `CF_SLUG` or `CF_PAGE_URL`, `FTB_MODPACK_ID`, `TYPE=GTNH`, or the file name of a `GENERIC_PACK` or `CF_MODPACK_ZIP` archive). A Modrinth project, or a pack whose exact name exists on Modrinth, gets its title, icon and link from the Modrinth API; CurseForge, FTB and GTNH link to their own sites. Servers with hand-installed mods name no pack anywhere, and remote servers have no container to read: both can be given a name and link in the server form, which detection then leaves alone.
 
 Ports are translated to what is reachable from the host (published port, or the container's own address when nothing is published), the container name is the link, so `docker compose up` recreating a container keeps it attached, and a changed address or port mapping is picked up on the next discovery run. Imported servers get a **Host container** panel with start/stop/restart, CPU and memory (one Docker stats sample per refresh, cached for 10 s), and the size of the data and world directories (`du` inside the container, cached for 5 min). Removing an imported server hides the container from discovery; it can be shown again from the panel.
 
@@ -68,7 +69,7 @@ make up                   # builds and starts backend + frontend in the backgrou
 ```
 
 - Dashboard: http://localhost:3000 (public view; sign in with a user from `GAMEFLEET_USERS` to manage servers)
-- API docs: http://localhost:8000/swagger, only with `GAMEFLEET_ENV=dev` (also proxied at http://localhost:3000/swagger)
+- API docs: http://localhost:8000/swagger, only with `GAMEFLEET_DEV=true` (also proxied at http://localhost:3000/swagger)
 
 `FRONTEND_PORT` and `BACKEND_PORT` in `.env` are the only ports to set. The frontend forwards `/api` to the backend
 inside the compose network, so browsers on the LAN need nothing but the frontend port.
@@ -83,7 +84,7 @@ One `.env` in the repository root configures everything: `docker-compose.yml` re
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `GAMEFLEET_ENV` | `prod` | `dev` serves the API docs (`/swagger`, `/redoc`, `/openapi.json`), logs verbosely, opens a dashboard without users to everyone and shows a development banner. `make backend` always runs in dev mode |
+| `GAMEFLEET_DEV` | `false` | `true` serves the API docs (`/swagger`, `/redoc`, `/openapi.json`), logs verbosely, opens a dashboard without users to everyone and shows a development banner. `make backend` always runs in dev mode |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Postgres on this host, `5432`, `gamefleet`, `gamefleet`, – | PostgreSQL connection; `make db` creates its database from the same values. Empty `DB_HOST` means `localhost` natively and `host.docker.internal` in Docker |
 | `DATABASE_URL` | – | Full SQLAlchemy URL (`postgresql+asyncpg://...`) that overrides the `DB_*` values |
 | `BACKEND_PORT` | `8000` | Published backend port (API, plus the Swagger UI in dev mode) |

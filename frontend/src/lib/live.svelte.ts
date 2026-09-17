@@ -63,7 +63,7 @@ export async function refreshServers(ids: string[]): Promise<void> {
 }
 
 /** One request for every Docker-linked server; the backend caches samples so this is cheap. */
-export async function refreshAllHostStats(): Promise<void> {
+async function refreshAllHostStats(): Promise<void> {
 	if (!loggedIn()) return; // host stats are not part of the public view
 	try {
 		live.host = (await api.hostStats.getAllHostStats()).data;

@@ -13,7 +13,7 @@ export const session = $state<{
 	authEnabled: boolean;
 	/** May see and change everything: logged in, or a development backend without users. */
 	admin: boolean;
-	/** The backend runs with GAMEFLEET_ENV=dev. */
+	/** The backend runs with GAMEFLEET_DEV=true. */
 	dev: boolean;
 	/** Set once /api/auth/me has answered; the layout waits for it before rendering pages. */
 	checked: boolean;

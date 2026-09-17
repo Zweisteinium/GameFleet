@@ -1,7 +1,7 @@
 # GameFleet: `make up` builds the images from source, `docker compose pull && docker compose up -d` runs the
 # published ones. Everything is configured through .env (see .env.example). The browser only talks to the
 # frontend, which forwards /api to the backend, so only FRONTEND_PORT has to be reachable; BACKEND_PORT exposes
-# the API directly (with its Swagger UI when GAMEFLEET_ENV=dev).
+# the API directly (with its Swagger UI when GAMEFLEET_DEV=true).
 name: gamefleet
 
 services:
@@ -13,8 +13,8 @@ services:
       target: ${TARGET:-prod}
     restart: unless-stopped
     environment:
-      # prod (default) or dev: dev serves the API docs, logs verbosely and shows a banner in the dashboard.
-      GAMEFLEET_ENV: ${GAMEFLEET_ENV:-prod}
+      # true serves the API docs, logs verbosely and shows a banner in the dashboard; not for production.
+      GAMEFLEET_DEV: ${GAMEFLEET_DEV:-false}
       # Unset DB_HOST means the Postgres published on this host (make db or your own); native dev uses localhost.
       DB_HOST: ${DB_HOST:-host.docker.internal}
       DB_PORT: ${DB_PORT:-5432}

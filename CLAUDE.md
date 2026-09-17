@@ -6,8 +6,8 @@ configuration, layout and make targets; this file holds only what is not obvious
 
 ## Decisions to keep
 
-- Schema changes are idempotent SQL in `LEGACY_SCHEMA_UPGRADES` (`db/session.py`). Alembic has no versions and never
-  runs; do not add migrations. `game` is `VARCHAR(50)`, so new game types need no DB change.
+- Schema changes are idempotent SQL in `LEGACY_SCHEMA_UPGRADES` (`db/session.py`). There is no migration tool
+  (Alembic was removed in 1.0); do not add one. `game` is `VARCHAR(50)`, so new game types need no DB change.
 - `GameServerPublic.from_server` validates from attributes: rows hold `game` as text and `model_dump()` output caused
   Pydantic serializer warnings.
 - Live info is a discriminated union on `kind` (`models/server_info.py`). Game-specific fields go into a `*ServerInfo`
@@ -19,7 +19,7 @@ configuration, layout and make targets; this file holds only what is not obvious
 - The browser talks to one origin: `hooks.server.ts` (Node server) and the Vite dev proxy forward `/api`, `/swagger`
   and `/openapi.json` to `BACKEND_URL`, so the API needs no CORS and the bundle contains no backend address. All
   ports and hosts come from `.env` through compose; nothing is baked into the images.
-- `GAMEFLEET_ENV` (`settings.DEV`, default prod) gates what only development needs: the docs and OpenAPI routes,
+- `GAMEFLEET_DEV` (`settings.DEV`, a boolean, default false) gates what only development needs: the docs and OpenAPI routes,
   debug logging, and open access when no users are configured (prod is read-only then). `/api/auth/me` reports
   `dev` and `admin`; the frontend takes both from there instead of deriving them. `make backend` forces dev.
 - Confirmations go through `confirmDialog()` (`lib/confirm.svelte.ts`, rendered once in the root layout); do not
@@ -30,11 +30,15 @@ configuration, layout and make targets; this file holds only what is not obvious
   the docker router need `current_user`. A rejected token is always a 401 (`optional_user`), never a silent downgrade.
 - The backend container is on the compose bridge network, reaches the host through `host.docker.internal`
   (`DB_HOST` default, `DOCKER_SERVER_ADDRESS`) and mounts the Docker socket. Docker-linked servers are keyed by
-  container name (compose recreates ids). `detect()` order is labels > `IMAGE_CATALOG` > keywords > unique default port; nothing
-  imports on its own, `import_all` takes running label and image matches. A linked server whose container is not
+  container name (compose recreates ids). `detect()` order is `IMAGE_CATALOG` > keywords > unique default port; nothing
+  imports on its own, `import_all` takes running image matches. There are no `gamefleet.*` labels and none should
+  come back: everything is read from the container (image, ports, env, mounts). A linked server whose container is not
   running is reported offline without a query (stopped containers can share a host port). `docker_service.complete`
   fills list-API gaps from inspect (bindings of stopped containers, digest-only images). A start checks
   `port_conflicts` first: 409 with the holders, `stop_conflicting` stops only containers that are GameFleet servers. Deleting a docker server records its name in `ignoredcontainer`.
+- Modpacks (`services/modpack_service.py`): `from_env` reads the itzg variables, `resolve` adds Modrinth title, icon
+  and link (slug lookup, or an exact title match only; cached 24 h, failures retried). The env is read once per
+  container id; `modpack_source == "manual"` marks a pack typed into the form, which sync never overwrites.
 - Host stats are request-driven and cached (10 s for `stats`, 5 min for `du`); CPU% needs two samples, so the first
   request reports null. No background stats loop.
 - Backups/rollback are planned on top of `data_path`, `world_path` and `ContainerMount`; keep those fields populated.
@@ -50,7 +54,7 @@ Follow the README steps, plus: popular Docker images go into `IMAGE_CATALOG` and
 
 ## Versioning
 
-One version in `backend/pyproject.toml` and `frontend/package.json` (currently 0.9.0). Bump it in the same commit as a
+One version in `backend/pyproject.toml` and `frontend/package.json` (currently 1.0.0). Bump it in the same commit as a
 user-visible change: patch for fixes and dependency updates, minor for features or UI changes, major for breaking API or
 DB changes. Docs and tooling commits need no bump. Run `uv lock` after touching `pyproject.toml`; commit both lockfiles.
 
@@ -66,7 +70,7 @@ DB changes. Docs and tooling commits need no bump. Run `uv lock` after touching 
 
 Run `make check` and `cd frontend && pnpm build` before declaring work done; report failures verbatim.
 
-Backend smoke test: `cd backend && GAMEFLEET_ENV=dev GAMEFLEET_USERS=admin:secret uv run uvicorn gamefleet_backend.main:app --port 8010`,
+Backend smoke test: `cd backend && GAMEFLEET_DEV=true GAMEFLEET_USERS=admin:secret uv run uvicorn gamefleet_backend.main:app --port 8010`,
 log in via `POST /api/auth/login`, then call `/api/servers`, `/api/servers/live-info`, `/api/docker/discovered` and
 `/api/servers/host-stats` with the bearer token, and `/api/servers` without one for the public view. The dev database comes from `make db`; the frontend targets the spare
 backend with `BACKEND_URL=http://localhost:8010 pnpm dev --port 3010`.

@@ -44,7 +44,7 @@
 				!item.server_id &&
 				!item.ignored &&
 				item.container.state === 'running' &&
-				(item.detected?.confidence === 'label' || item.detected?.confidence === 'image')
+				item.detected?.confidence === 'image'
 		)
 	);
 

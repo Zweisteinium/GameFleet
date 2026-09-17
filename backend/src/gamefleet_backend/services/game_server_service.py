@@ -1,7 +1,6 @@
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from sqlalchemy import delete
 
 from gamefleet_backend.db.models.game_server import GameServer
 from gamefleet_backend.models.game_server_type import GameServerType

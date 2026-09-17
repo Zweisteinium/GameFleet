@@ -15,6 +15,7 @@ from gamefleet_backend.services.docker_discovery_service import DockerDiscoveryS
 from gamefleet_backend.services.docker_service import DockerUnavailable, docker_service
 from gamefleet_backend.services.game_server_service import GameServerService
 from gamefleet_backend.services.live_server_info_service import LiveServerInfoService
+from gamefleet_backend.services.modpack_service import manual_fields
 
 
 router = APIRouter()
@@ -31,6 +32,9 @@ class GameServerCreate(BaseModel):
     rcon_port: int | None = Field(default=None, ge=1, le=65535)
     rcon_password: str | None = None
     is_public: bool = False
+    # Typed by the user; Docker-linked servers detect their pack on their own.
+    modpack_name: str | None = Field(default=None, max_length=200)
+    modpack_url: str | None = Field(default=None, max_length=500)
 
 
 class GameServerUpdate(BaseModel):
@@ -42,6 +46,9 @@ class GameServerUpdate(BaseModel):
     rcon_port: int | None = Field(default=None, ge=1, le=65535)
     rcon_password: str | None = None
     is_public: bool | None = None
+    # An empty name clears a typed pack and lets detection fill it in again.
+    modpack_name: str | None = Field(default=None, max_length=200)
+    modpack_url: str | None = Field(default=None, max_length=500)
 
 
 class PowerRequest(BaseModel):
@@ -104,7 +111,9 @@ async def post_server(
     service: GameServerService = Depends(get_game_server_service)
 ):
     """Create a new game server."""
-    return GameServerPublic.from_server(await service.create_server(server_data.model_dump()))
+    data = server_data.model_dump()
+    data.update(await manual_fields(data.pop("modpack_name"), data.pop("modpack_url")))
+    return GameServerPublic.from_server(await service.create_server(data))
 
 
 @router.get("/supported_types", response_model=Sequence[GameServerType], operation_id="getSupportedServerTypes")
@@ -185,6 +194,13 @@ async def update_server(
 ):
     """Update an existing game server (only fields that are sent are changed)."""
     update_data = server_data.model_dump(exclude_unset=True)
+    if "modpack_name" in update_data or "modpack_url" in update_data:
+        current = await service.get_server_by_id(server_id)
+        typed = (update_data.pop("modpack_name", None), update_data.pop("modpack_url", None))
+        # The form sends back what it was given: only a change makes the pack a manual one.
+        blank = lambda pair: tuple((value or "").strip() for value in pair)  # noqa: E731
+        if current and blank(typed) != blank((current.modpack_name, current.modpack_url)):
+            update_data.update(await manual_fields(*typed))
     server = await service.update_server(server_id, update_data)
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")

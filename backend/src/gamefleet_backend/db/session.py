@@ -6,16 +6,17 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from urllib.parse import quote_plus
 
 
-def database_url(driver: str = "asyncpg") -> str:
-    """Connection URL from the DB_* variables; a full DATABASE_URL overrides them."""
+def database_url() -> str:
+    """Connection URL from the DB_* variables; a full DATABASE_URL overrides them. Variables that are set
+    but empty (as DB_HOST is in .env.example) count as unset."""
     if url := os.getenv("DATABASE_URL"):
         return url
-    user = quote_plus(os.getenv("DB_USER", "gamefleet"))
-    password = quote_plus(os.getenv("DB_PASSWORD", ""))
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5432")
-    name = os.getenv("DB_NAME", "gamefleet")
-    return f"postgresql+{driver}://{user}:{password}@{host}:{port}/{name}"
+    user = quote_plus(os.getenv("DB_USER") or "gamefleet")
+    password = quote_plus(os.getenv("DB_PASSWORD") or "")
+    host = os.getenv("DB_HOST") or "localhost"
+    port = os.getenv("DB_PORT") or "5432"
+    name = os.getenv("DB_NAME") or "gamefleet"
+    return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{name}"
 
 
 engine = create_async_engine(database_url())
@@ -40,6 +41,12 @@ LEGACY_SCHEMA_UPGRADES = [
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_gameserver_container_name ON gameserver (container_name)",
     # 0.8: visitors without a login only see servers flagged public.
     "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE",
+    # 0.10: modpack of a Minecraft server.
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS modpack_name VARCHAR(200)",
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS modpack_version VARCHAR(100)",
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS modpack_url VARCHAR(500)",
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS modpack_icon VARCHAR(500)",
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS modpack_source VARCHAR(20)",
 ]
 
 
