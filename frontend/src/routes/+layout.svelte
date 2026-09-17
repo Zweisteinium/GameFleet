@@ -80,7 +80,7 @@
 			>
 				<Icon name="info" size={14} />
 				Development mode: API docs are exposed and logging is verbose. Not intended for production; set
-				<code class="font-mono">GAMEFLEET_ENV=prod</code>.
+				<code class="font-mono">GAMEFLEET_DEV=false</code>.
 			</p>
 		{/if}
 		{#if session.checked && !session.authEnabled && !onLoginPage}

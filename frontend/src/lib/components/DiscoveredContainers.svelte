@@ -22,7 +22,6 @@
 	const games = Object.entries(GAME_LABELS).sort((a, b) => a[1].localeCompare(b[1]));
 
 	const CONFIDENCE: Record<string, { label: string; tone: string }> = {
-		label: { label: 'labelled', tone: 'bg-accent-soft text-accent' },
 		image: { label: 'known image', tone: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' },
 		keyword: { label: 'name match', tone: 'bg-amber-500/10 text-amber-700 dark:text-amber-400' },
 		port: { label: 'port match', tone: 'bg-amber-500/10 text-amber-700 dark:text-amber-400' }

@@ -23,7 +23,7 @@ class SessionInfo(BaseModel):
     username: str | None = None
     # False for a visitor in public mode; true when logged in, or for everyone in a dev setup without users.
     admin: bool
-    # Development mode (GAMEFLEET_ENV=dev): API docs are served; the dashboard shows a banner.
+    # Development mode (GAMEFLEET_DEV=true): API docs are served; the dashboard shows a banner.
     dev: bool
 
 

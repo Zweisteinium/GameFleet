@@ -313,6 +313,10 @@ export interface GameServerCreate {
    * @default false
    */
   is_public?: boolean;
+  /** Modpack Name */
+  modpack_name?: string | null;
+  /** Modpack Url */
+  modpack_url?: string | null;
 }
 
 /**
@@ -358,6 +362,16 @@ export interface GameServerPublic {
    * @default false
    */
   is_public?: boolean;
+  /** Modpack Name */
+  modpack_name?: string | null;
+  /** Modpack Version */
+  modpack_version?: string | null;
+  /** Modpack Url */
+  modpack_url?: string | null;
+  /** Modpack Icon */
+  modpack_icon?: string | null;
+  /** Modpack Source */
+  modpack_source?: string | null;
   /** Id */
   id: string;
   /**
@@ -384,6 +398,10 @@ export interface GameServerUpdate {
   rcon_password?: string | null;
   /** Is Public */
   is_public?: boolean | null;
+  /** Modpack Name */
+  modpack_name?: string | null;
+  /** Modpack Url */
+  modpack_url?: string | null;
 }
 
 /** GameTypeInfo */
@@ -960,7 +978,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
 /**
  * @title Game Server Dashboard API
- * @version 0.8.0
+ * @version 0.9.0
  *
  * API for managing and monitoring game servers
  */

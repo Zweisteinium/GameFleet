@@ -20,7 +20,7 @@ install: ## Install backend (uv) and frontend (pnpm) dependencies
 	cd frontend && pnpm install
 
 backend: ## Run the API in dev mode (docs at /swagger) with auto-reload on http://localhost:8000
-	cd backend && GAMEFLEET_ENV=dev uv run uvicorn gamefleet_backend.main:app --reload --host 127.0.0.1 --port 8000
+	cd backend && GAMEFLEET_DEV=true uv run uvicorn gamefleet_backend.main:app --reload --host 127.0.0.1 --port 8000
 
 frontend: ## Run the SvelteKit dev server on http://localhost:3000
 	cd frontend && pnpm dev

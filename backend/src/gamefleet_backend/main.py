@@ -19,7 +19,7 @@ if DEV:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if DEV:
-        logging.getLogger(__name__).warning("Development mode (GAMEFLEET_ENV=dev): API docs are served; not for production")
+        logging.getLogger(__name__).warning("Development mode (GAMEFLEET_DEV=true): API docs are served; not for production")
     log_startup_state()
     await init_db()
     task = asyncio.create_task(discovery_loop()) if DISCOVERY_INTERVAL > 0 else None

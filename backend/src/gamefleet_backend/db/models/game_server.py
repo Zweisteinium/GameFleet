@@ -26,6 +26,13 @@ class GameServerBase(SQLModel):
     world_path: Optional[str] = Field(default=None, max_length=300)
     # Shown to visitors who are not logged in.
     is_public: bool = Field(default=False)
+    # Modpack (Minecraft): detected from the container (services/modpack_service.py) or typed into the form.
+    # modpack_source "manual" marks the latter, which detection never overwrites.
+    modpack_name: Optional[str] = Field(default=None, max_length=200)
+    modpack_version: Optional[str] = Field(default=None, max_length=100)
+    modpack_url: Optional[str] = Field(default=None, max_length=500)
+    modpack_icon: Optional[str] = Field(default=None, max_length=500)
+    modpack_source: Optional[str] = Field(default=None, max_length=20)
 
 
 class GameServer(GameServerBase, table=True):

@@ -35,7 +35,7 @@ class ContainerInfo(BaseModel):
 class DetectedGame(BaseModel):
     """What GameFleet thinks a container is, and how it would be imported."""
     game: GameServerType
-    # label: explicit gamefleet.* labels; image: a known image; keyword: image/container name; port: exposed ports only
+    # image: a known image; keyword: image/container name; port: exposed ports only; manual: the user chose the game
     confidence: str
     reasons: list[str]
     address: str

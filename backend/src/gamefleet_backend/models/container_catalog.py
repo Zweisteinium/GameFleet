@@ -1,12 +1,11 @@
 """Fingerprints for recognising game servers that run as Docker containers on this host.
 
-Detection is layered, most reliable first:
+Detection reads the container as it is (GameFleet defines no labels), most reliable first:
 
-1. ``gamefleet.*`` labels on the container are authoritative (see LABELS below).
-2. Known images (IMAGE_CATALOG) identify the game *and* tell us where its data lives and how its RCON
+1. Known images (IMAGE_CATALOG) identify the game *and* tell us where its data lives and how its RCON
    password is configured, so the import needs no user input.
-3. Keywords in the image or container name give a suggestion that the user confirms.
-4. Exposed ports only confirm or rank the above; on their own they are too ambiguous (7777 is ARK,
+2. Keywords in the image or container name give a suggestion that the user confirms.
+3. Exposed ports only confirm or rank the above; on their own they are too ambiguous (7777 is ARK,
    Satisfactory, Terraria, ...), so a port-only match is shown but never auto-imported.
 """
 import re
@@ -14,22 +13,6 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from gamefleet_backend.models.game_server_type import GameServerType
-
-# Container labels understood by GameFleet. Everything except `game` is optional.
-LABELS = {
-    "game": "gamefleet.game",  # a GameServerType value, e.g. factorio
-    "name": "gamefleet.name",  # display name (defaults to the container name)
-    "port": "gamefleet.port",  # game port *inside* the container (defaults to the game's default port)
-    "query_port": "gamefleet.query_port",  # A2S query port inside the container
-    "rcon_port": "gamefleet.rcon_port",  # RCON port inside the container
-    "rcon_password": "gamefleet.rcon_password",  # RCON password (prefer rcon_password_env)
-    "rcon_password_env": "gamefleet.rcon_password_env",  # name of the container env var holding the password
-    "rcon_password_file": "gamefleet.rcon_password_file",  # path inside the container holding the password
-    "data_path": "gamefleet.data_path",  # persistent data directory inside the container
-    "world_path": "gamefleet.world_path",  # save/world directory inside the container
-    "ignore": "gamefleet.ignore",  # "true" hides the container from discovery
-}
-
 
 @dataclass(frozen=True)
 class ImageFingerprint:
@@ -82,6 +65,7 @@ IMAGE_CATALOG: dict[str, ImageFingerprint] = {
     "cm2network/cs2": ImageFingerprint(GameServerType.counter_strike, "/home/steam/cs2-dedicated"),
     "joedwards32/cs2": ImageFingerprint(GameServerType.counter_strike, "/home/steam/cs2-dedicated"),
     "cm2network/gmod": ImageFingerprint(GameServerType.garrys_mod, "/home/steam/gmod-dedicated"),
+    "ceifa/garrysmod": ImageFingerprint(GameServerType.garrys_mod, "/home/gmod/server/garrysmod", "/home/gmod/server/garrysmod/data"),
     "cm2network/steamcmd": ImageFingerprint(GameServerType.steam),
     "danixu86/project-zomboid-dedicated-server": ImageFingerprint(GameServerType.project_zomboid, "/server-data", "/server-data/Saves"),
     "afey/zomboid": ImageFingerprint(GameServerType.project_zomboid, "/home/steam/Zomboid", "/home/steam/Zomboid/Saves"),

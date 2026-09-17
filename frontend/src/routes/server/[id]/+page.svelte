@@ -44,6 +44,22 @@
 	const hostStats = $derived(live.host[serverId]);
 	const refreshing = $derived(live.pending[serverId] ?? false);
 	const isLocal = $derived(server?.source === 'docker');
+
+	const MODPACK_SITES: Record<string, string> = {
+		modrinth: 'Modrinth',
+		curseforge: 'CurseForge',
+		ftb: 'Feed The Beast',
+		official: 'Website'
+	};
+	/** Link label for a typed URL: Modrinth and CurseForge by name, anything else by host. */
+	function modpackHost(url: string): string {
+		try {
+			const host = new URL(url).hostname.replace(/^www\./, '');
+			return host === 'modrinth.com' ? 'Modrinth' : host === 'curseforge.com' ? 'CurseForge' : host;
+		} catch {
+			return 'Link';
+		}
+	}
 	const tiles = $derived(liveInfo && server ? overviewTiles(liveInfo, server.game) : []);
 	const caps = $derived(liveInfo ? capabilities(liveInfo) : null);
 
@@ -211,6 +227,28 @@
 									><Icon name="key" size={14} />RCON {server.rcon_port ?? 'default'}</span
 								>{/if}
 						</div>
+						{#if server.modpack_name}
+							<div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+								{#if server.modpack_icon}
+									<img src={server.modpack_icon} alt="" class="h-6 w-6 rounded-md" loading="lazy" />
+								{:else}
+									<Icon name="puzzle" size={16} class="text-ink-3" />
+								{/if}
+								<span class="font-medium">{server.modpack_name}</span>
+								{#if server.modpack_version}<span class="text-ink-3">{server.modpack_version}</span>{/if}
+								{#if server.modpack_url}
+									<a
+										href={server.modpack_url}
+										target="_blank"
+										rel="external noreferrer"
+										class="text-accent inline-flex items-center gap-1 text-xs font-medium hover:underline"
+									>
+										{MODPACK_SITES[server.modpack_source ?? ''] ?? modpackHost(server.modpack_url)}
+										<Icon name="external-link" size={12} />
+									</a>
+								{/if}
+							</div>
+						{/if}
 						{#if liveInfo}
 							<div class="mt-3">
 								<ServerProperties info={liveInfo} />
