@@ -27,6 +27,9 @@ class ContainerInfo(BaseModel):
     ports: list[PortBinding]
     mounts: list[ContainerMount]
     labels: dict[str, str]
+    # Where the container comes from when compose created it; tells apart many instances of one game.
+    compose_project: Optional[str] = None
+    compose_dir: Optional[str] = None
 
 
 class DetectedGame(BaseModel):
@@ -68,10 +71,11 @@ class HostStats(BaseModel):
     sizes_sampled_at: Optional[float] = None
     sampled_at: float
     error: Optional[str] = None
+    compose_project: Optional[str] = None
+    compose_dir: Optional[str] = None
 
 
 class DockerStatus(BaseModel):
     available: bool
     error: Optional[str] = None
-    auto_import: bool
     address: str  # address that imported containers are reached at

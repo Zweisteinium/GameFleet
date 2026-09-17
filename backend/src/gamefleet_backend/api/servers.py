@@ -5,6 +5,7 @@ import docker.errors
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from gamefleet_backend.auth import current_user, is_admin
 from gamefleet_backend.db.models.game_server import GameServer, GameServerPublic
 from gamefleet_backend.dependencies import get_docker_discovery_service, get_game_server_service
 from gamefleet_backend.models.container_info import HostStats
@@ -17,6 +18,8 @@ from gamefleet_backend.services.live_server_info_service import LiveServerInfoSe
 
 
 router = APIRouter()
+# Everything that changes data or touches the host needs a login.
+LOGIN = [Depends(current_user)]
 
 
 class GameServerCreate(BaseModel):
@@ -27,6 +30,7 @@ class GameServerCreate(BaseModel):
     query_port: int | None = Field(default=None, ge=1, le=65535)
     rcon_port: int | None = Field(default=None, ge=1, le=65535)
     rcon_password: str | None = None
+    is_public: bool = False
 
 
 class GameServerUpdate(BaseModel):
@@ -37,10 +41,30 @@ class GameServerUpdate(BaseModel):
     query_port: int | None = Field(default=None, ge=1, le=65535)
     rcon_port: int | None = Field(default=None, ge=1, le=65535)
     rcon_password: str | None = None
+    is_public: bool | None = None
 
 
 class PowerRequest(BaseModel):
     action: Literal["start", "stop", "restart"]
+    # On start: stop the servers that hold this server's host ports instead of answering 409.
+    stop_conflicting: bool = False
+
+
+class PortConflict(BaseModel):
+    container_name: str
+    ports: list[str]  # "25565/tcp"
+    # The GameFleet server behind the container; only those can be stopped from here.
+    server_id: str | None = None
+    server_name: str | None = None
+
+
+class PowerConflictDetail(BaseModel):
+    message: str
+    conflicts: list[PortConflict]
+
+
+class PowerConflict(BaseModel):
+    detail: PowerConflictDetail
 
 
 class GameTypeInfo(BaseModel):
@@ -53,15 +77,28 @@ class GameTypeInfo(BaseModel):
     needs_rcon: bool
 
 
+def _visible(servers: Sequence[GameServer], admin: bool) -> list[GameServer]:
+    return [s for s in servers if admin or s.is_public]
+
+
+async def _visible_server(server_id: str, admin: bool, service: GameServerService) -> GameServer:
+    """The server, or 404 when it does not exist or is hidden from the caller (no hint that it exists)."""
+    server = await service.get_server_by_id(server_id)
+    if not server or not (admin or server.is_public):
+        raise HTTPException(status_code=404, detail="Server not found")
+    return server
+
+
 @router.get('', response_model=Sequence[GameServerPublic], operation_id="getServers")
 async def get_servers(
+    admin: bool = Depends(is_admin),
     service: GameServerService = Depends(get_game_server_service)
 ):
-    """Get all game servers from the database."""
-    return [GameServerPublic.from_server(s) for s in await service.get_all_servers()]
+    """Get the game servers the caller may see: all of them when logged in, the public ones otherwise."""
+    return [GameServerPublic.from_server(s, admin) for s in _visible(await service.get_all_servers(), admin)]
 
 
-@router.post('', response_model=GameServerPublic, operation_id="postServer")
+@router.post('', response_model=GameServerPublic, operation_id="postServer", dependencies=LOGIN)
 async def post_server(
     server_data: GameServerCreate,
     service: GameServerService = Depends(get_game_server_service)
@@ -95,14 +132,15 @@ def game_types() -> list[GameTypeInfo]:
 
 @router.get('/live-info', response_model=dict[str, LiveServerInfo], operation_id="getAllServersLiveInfo")
 async def get_all_servers_live_info(
+    admin: bool = Depends(is_admin),
     service: GameServerService = Depends(get_game_server_service)
 ):
-    """Get live information for every server at once (queried concurrently)."""
-    servers = await service.get_all_servers()
-    return await LiveServerInfoService.get_all_server_info(list(servers))
+    """Get live information for every visible server at once (queried concurrently)."""
+    servers = _visible(await service.get_all_servers(), admin)
+    return await LiveServerInfoService.get_all_server_info(servers)
 
 
-@router.get('/host-stats', response_model=dict[str, HostStats], operation_id="getAllHostStats")
+@router.get('/host-stats', response_model=dict[str, HostStats], operation_id="getAllHostStats", dependencies=LOGIN)
 async def get_all_host_stats(
     service: GameServerService = Depends(get_game_server_service)
 ):
@@ -121,25 +159,25 @@ async def get_all_host_stats(
 @router.get('/by-type/{server_type}', response_model=Sequence[GameServerPublic], operation_id="getServersByType")
 async def get_servers_by_type(
     server_type: GameServerType,
+    admin: bool = Depends(is_admin),
     service: GameServerService = Depends(get_game_server_service)
 ):
-    """Get all servers of a specific game type."""
-    return [GameServerPublic.from_server(s) for s in await service.get_servers_by_type(server_type)]
+    """Get the visible servers of a specific game type."""
+    servers = _visible(await service.get_servers_by_type(server_type), admin)
+    return [GameServerPublic.from_server(s, admin) for s in servers]
 
 
 @router.get('/{server_id}', response_model=GameServerPublic, operation_id="getServerById")
 async def get_server(
     server_id: str,
+    admin: bool = Depends(is_admin),
     service: GameServerService = Depends(get_game_server_service)
 ):
     """Get a specific game server by ID."""
-    server = await service.get_server_by_id(server_id)
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
-    return GameServerPublic.from_server(server)
+    return GameServerPublic.from_server(await _visible_server(server_id, admin, service), admin)
 
 
-@router.put('/{server_id}', response_model=GameServerPublic, operation_id="updateServer")
+@router.put('/{server_id}', response_model=GameServerPublic, operation_id="updateServer", dependencies=LOGIN)
 async def update_server(
     server_id: str,
     server_data: GameServerUpdate,
@@ -153,7 +191,7 @@ async def update_server(
     return GameServerPublic.from_server(server)
 
 
-@router.delete('/{server_id}', operation_id="deleteServer")
+@router.delete('/{server_id}', operation_id="deleteServer", dependencies=LOGIN)
 async def delete_server(
     server_id: str,
     service: GameServerService = Depends(get_game_server_service),
@@ -180,7 +218,7 @@ async def _docker_server(server_id: str, service: GameServerService) -> GameServ
     return server
 
 
-@router.get('/{server_id}/host', response_model=HostStats, operation_id="getServerHostStats")
+@router.get('/{server_id}/host', response_model=HostStats, operation_id="getServerHostStats", dependencies=LOGIN)
 async def get_server_host_stats(
     server_id: str,
     service: GameServerService = Depends(get_game_server_service)
@@ -193,22 +231,57 @@ async def get_server_host_stats(
         raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
 
 
-@router.post('/{server_id}/power', response_model=HostStats, operation_id="powerServer")
+async def _free_ports(server: GameServer, stop_conflicting: bool, service: GameServerService) -> None:
+    """Instances of one game usually share a host port, so only one of them can run. Before a start, find the
+    running containers that hold this server's ports: answer 409 with them, or stop them when asked to."""
+    held = await docker_service.port_conflicts(server.container_name)
+    if not held:
+        return
+    linked = {s.container_name: s for s in await service.get_all_servers() if s.source == "docker"}
+    conflicts = [
+        PortConflict(container_name=name, ports=ports, server_id=getattr(linked.get(name), "id", None),
+                     server_name=getattr(linked.get(name), "name", None))
+        for name, ports in held.items()
+    ]
+    foreign = [c.container_name for c in conflicts if c.server_id is None]
+    if stop_conflicting and not foreign:
+        for conflict in conflicts:
+            await docker_service.power(conflict.container_name, "stop")
+            docker_service.forget(conflict.container_name)
+        return
+    ports = ", ".join(sorted({p for c in conflicts for p in c.ports}))
+    holders = ", ".join(f"{c.server_name} ({c.container_name})" if c.server_name else c.container_name for c in conflicts)
+    message = f"Port {ports} is in use by {holders}."
+    if foreign:
+        message += f" {', '.join(foreign)} is not a GameFleet server and has to be stopped on the host."
+    raise HTTPException(status_code=409, detail=PowerConflictDetail(message=message, conflicts=conflicts).model_dump())
+
+
+@router.post('/{server_id}/power', response_model=HostStats, operation_id="powerServer", dependencies=LOGIN,
+             responses={409: {"model": PowerConflict, "description": "A host port is held by another container"}})
 async def power_server(
     server_id: str,
     body: PowerRequest,
     service: GameServerService = Depends(get_game_server_service)
 ):
-    """Start, stop or restart the container behind a Docker-linked server."""
+    """Start, stop or restart the container behind a Docker-linked server. A start answers 409 with the
+    containers that hold its host ports; repeat it with `stop_conflicting` to stop those servers first."""
     server = await _docker_server(server_id, service)
     try:
+        if body.action == "start":
+            await _free_ports(server, body.stop_conflicting, service)
         await docker_service.power(server.container_name, body.action)
     except DockerUnavailable as exc:
         raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
     except docker.errors.NotFound:
         raise HTTPException(status_code=404, detail="Container not found")
     except docker.errors.APIError as exc:
-        raise HTTPException(status_code=502, detail=f"Docker refused the request: {exc.explanation or exc}")
+        reason = str(exc.explanation or exc)
+        if "already allocated" in reason or "address already in use" in reason:
+            # Not held by a container (those are caught above): a process on the host owns the port.
+            detail = PowerConflictDetail(message=f"A port of this server is already in use on the host: {reason}", conflicts=[])
+            raise HTTPException(status_code=409, detail=detail.model_dump())
+        raise HTTPException(status_code=502, detail=f"Docker refused the request: {reason}")
     docker_service.forget(server.container_name)
     return await docker_service.host_stats(server.container_name, server.data_path, server.world_path)
 
@@ -216,10 +289,8 @@ async def power_server(
 @router.get('/{server_id}/live-info', response_model=LiveServerInfo, operation_id="getServerLiveInfoById")
 async def get_server_live_info_by_id(
     server_id: str,
+    admin: bool = Depends(is_admin),
     service: GameServerService = Depends(get_game_server_service)
 ):
     """Get live information for a server by its database ID."""
-    server = await service.get_server_by_id(server_id)
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
-    return await LiveServerInfoService.get_server_info(server)
+    return await LiveServerInfoService.get_server_info(await _visible_server(server_id, admin, service))

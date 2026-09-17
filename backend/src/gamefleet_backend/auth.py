@@ -5,8 +5,9 @@ registration. A password may be given in plain text or as an scrypt hash produce
 ``python -m gamefleet_backend.auth hash``. Successful logins get a signed, stateless bearer token
 (HMAC over ``user|expiry``), so nothing about sessions is stored in the database.
 
-If no users are configured, authentication is disabled and every endpoint is open; the API says so in
-``/api/auth/me`` and the frontend shows a warning.
+Visitors without a token are in public mode: they see the servers flagged ``is_public`` and nothing that
+changes or reveals the host (see ``is_admin``). If no users are configured, authentication is disabled and
+every endpoint is open; the API says so in ``/api/auth/me`` and the frontend shows a warning.
 """
 import base64
 import hashlib
@@ -19,7 +20,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 log = logging.getLogger(__name__)
@@ -128,15 +129,31 @@ def authenticate(username: str, password: str) -> Optional[User]:
 _bearer = HTTPBearer(auto_error=False)
 
 
-async def current_user(
-    request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(_bearer)
-) -> Optional[User]:
-    """The logged-in user, or None when authentication is disabled."""
-    if not AUTH_ENABLED:
+def _unauthorized() -> HTTPException:
+    return HTTPException(status_code=401, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer"})
+
+
+async def optional_user(credentials: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> Optional[User]:
+    """The logged-in user, or None for a visitor. A token that is sent but rejected is a 401, never a silent
+    downgrade to public mode, so clients notice that their session ended."""
+    if not AUTH_ENABLED or credentials is None:
         return None
-    user = verify_token(credentials.credentials) if credentials else None
+    user = verify_token(credentials.credentials)
     if user is None:
-        raise HTTPException(status_code=401, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer"})
+        raise _unauthorized()
+    return user
+
+
+async def is_admin(user: Optional[User] = Depends(optional_user)) -> bool:
+    """Whether the caller may see and change everything: any logged-in user, or everyone while
+    authentication is disabled."""
+    return not AUTH_ENABLED or user is not None
+
+
+async def current_user(user: Optional[User] = Depends(optional_user)) -> Optional[User]:
+    """Require a login. Returns None only when authentication is disabled."""
+    if AUTH_ENABLED and user is None:
+        raise _unauthorized()
     return user
 
 

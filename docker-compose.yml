@@ -7,7 +7,7 @@ name: gamefleet
 services:
   backend:
     container_name: gamefleet-backend
-    image: ${DOCKER_REPO:-h3xachad}/gamefleet-backend:${VERSION:-latest}
+    image: ${DOCKER_REPO:-lordlayer}/gamefleet_backend:${VERSION:-latest}
     build:
       context: ./backend
       target: ${TARGET:-prod}
@@ -23,9 +23,7 @@ services:
       # Login: "name:password,name2:password2" (plain or scrypt hashes from `make hash`; escape $ as $$ in .env).
       GAMEFLEET_USERS: ${GAMEFLEET_USERS:-}
       GAMEFLEET_SECRET: ${GAMEFLEET_SECRET:-}
-      # Docker discovery of game servers on this host (needs the socket mount below); their published ports are
-      # reached through the Docker host.
-      DOCKER_AUTO_IMPORT: ${DOCKER_AUTO_IMPORT:-true}
+      # Game-server containers on this host (needs the socket mount below) are reached through the Docker host.
       DOCKER_SERVER_ADDRESS: ${DOCKER_SERVER_ADDRESS:-host.docker.internal}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -39,7 +37,7 @@ services:
 
   frontend:
     container_name: gamefleet-frontend
-    image: ${DOCKER_REPO:-h3xachad}/gamefleet-frontend:${VERSION:-latest}
+    image: ${DOCKER_REPO:-lordlayer}/gamefleet_frontend:${VERSION:-latest}
     build:
       context: ./frontend
     restart: unless-stopped

@@ -1,11 +1,11 @@
 # GameFleet - one Makefile for native development and Docker deployment.
 # Run `make` or `make help` for the list of targets.
 
-DOCKER_REPO ?= h3xachad
+DOCKER_REPO ?= lordlayer
 # Image tag defaults to the project version in backend/pyproject.toml (kept in sync with frontend/package.json).
 VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' backend/pyproject.toml)
-BACKEND_IMAGE  = $(DOCKER_REPO)/gamefleet-backend
-FRONTEND_IMAGE = $(DOCKER_REPO)/gamefleet-frontend
+BACKEND_IMAGE  = $(DOCKER_REPO)/gamefleet_backend
+FRONTEND_IMAGE = $(DOCKER_REPO)/gamefleet_frontend
 COMPOSE = DOCKER_REPO=$(DOCKER_REPO) VERSION=$(VERSION) docker compose
 # Includes the development database (profile "db") for targets that stop or inspect everything.
 COMPOSE_ALL = $(COMPOSE) --profile db

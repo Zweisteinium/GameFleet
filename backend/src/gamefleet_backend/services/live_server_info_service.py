@@ -9,6 +9,7 @@ from gamefleet_backend.lib.query.satisfactory import get_satisfactory_server_inf
 from gamefleet_backend.lib.query.ark_ase import get_ark_ase_server_info
 from gamefleet_backend.lib.query.ark_asa import get_ark_asa_server_info
 from gamefleet_backend.lib.query.steam import get_steam_server_info
+from gamefleet_backend.services.docker_service import docker_service
 
 # Hard upper bound per server so one dead host can never stall a dashboard refresh.
 QUERY_DEADLINE = 20.0
@@ -23,6 +24,15 @@ class LiveServerInfoService:
         spec = GAME_CATALOG.get(server.game)
         if spec is None:
             return BaseServerInfo(status=ServerStatus.UNKNOWN, error_message=f"Unsupported server type: {server.game}")
+
+        # Containers that share a published port take turns running: asking the port of a stopped one would
+        # answer with whichever container currently owns it.
+        if server.source == "docker" and server.container_name:
+            states = await docker_service.states()
+            if states is not None and states.get(server.container_name) != "running":
+                state = states.get(server.container_name)
+                message = f"The container is {state}" if state else "The container no longer exists"
+                return BaseServerInfo(status=ServerStatus.OFFLINE, error_message=message)
 
         address, port = server.address, server.port
         rcon_port = server.rcon_port or spec.default_rcon_port

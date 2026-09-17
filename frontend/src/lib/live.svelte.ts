@@ -1,4 +1,5 @@
 import { api } from '$lib/api/ApiService';
+import { loggedIn } from '$lib/auth.svelte';
 import { ServerStatus, type HostStats } from '$lib/api/Api';
 import type { LiveServerInfo } from '$lib/api/types';
 
@@ -63,6 +64,7 @@ export async function refreshServers(ids: string[]): Promise<void> {
 
 /** One request for every Docker-linked server; the backend caches samples so this is cheap. */
 export async function refreshAllHostStats(): Promise<void> {
+	if (!loggedIn()) return; // host stats are not part of the public view
 	try {
 		live.host = (await api.hostStats.getAllHostStats()).data;
 	} catch (error) {

@@ -20,6 +20,8 @@ class LoginResponse(BaseModel):
 class SessionInfo(BaseModel):
     auth_enabled: bool
     username: str | None = None
+    # False for a visitor in public mode; true when logged in or when authentication is disabled.
+    admin: bool
 
 
 @router.post("/login", response_model=LoginResponse, operation_id="login")
@@ -35,6 +37,10 @@ def login(body: LoginRequest):
 
 
 @router.get("/me", response_model=SessionInfo, operation_id="getSession")
-async def me(user: auth.User | None = Depends(auth.current_user)):
-    """Whether login is required and who the caller is. Returns 401 for a missing or expired token."""
-    return SessionInfo(auth_enabled=auth.AUTH_ENABLED, username=user.name if user else None)
+async def me(user: auth.User | None = Depends(auth.optional_user)):
+    """Who the caller is: a visitor, a logged-in user, or anyone with login disabled. 401 for a rejected token."""
+    return SessionInfo(
+        auth_enabled=auth.AUTH_ENABLED,
+        username=user.name if user else None,
+        admin=not auth.AUTH_ENABLED or user is not None,
+    )

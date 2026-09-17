@@ -161,6 +161,10 @@ export interface ContainerInfo {
   mounts: ContainerMount[];
   /** Labels */
   labels: Record<string, string>;
+  /** Compose Project */
+  compose_project?: string | null;
+  /** Compose Dir */
+  compose_dir?: string | null;
 }
 
 /**
@@ -226,8 +230,6 @@ export interface DockerStatus {
   available: boolean;
   /** Error */
   error?: string | null;
-  /** Auto Import */
-  auto_import: boolean;
   /** Address */
   address: string;
 }
@@ -306,6 +308,11 @@ export interface GameServerCreate {
   rcon_port?: number | null;
   /** Rcon Password */
   rcon_password?: string | null;
+  /**
+   * Is Public
+   * @default false
+   */
+  is_public?: boolean;
 }
 
 /**
@@ -346,6 +353,11 @@ export interface GameServerPublic {
   data_path?: string | null;
   /** World Path */
   world_path?: string | null;
+  /**
+   * Is Public
+   * @default false
+   */
+  is_public?: boolean;
   /** Id */
   id: string;
   /**
@@ -370,6 +382,8 @@ export interface GameServerUpdate {
   rcon_port?: number | null;
   /** Rcon Password */
   rcon_password?: string | null;
+  /** Is Public */
+  is_public?: boolean | null;
 }
 
 /** GameTypeInfo */
@@ -425,6 +439,10 @@ export interface HostStats {
   sampled_at: number;
   /** Error */
   error?: string | null;
+  /** Compose Project */
+  compose_project?: string | null;
+  /** Compose Dir */
+  compose_dir?: string | null;
 }
 
 /** ImportRequest */
@@ -511,10 +529,40 @@ export interface PortBinding {
   protocol: string;
 }
 
+/** PortConflict */
+export interface PortConflict {
+  /** Container Name */
+  container_name: string;
+  /** Ports */
+  ports: string[];
+  /** Server Id */
+  server_id?: string | null;
+  /** Server Name */
+  server_name?: string | null;
+}
+
+/** PowerConflict */
+export interface PowerConflict {
+  detail: PowerConflictDetail;
+}
+
+/** PowerConflictDetail */
+export interface PowerConflictDetail {
+  /** Message */
+  message: string;
+  /** Conflicts */
+  conflicts: PortConflict[];
+}
+
 /** PowerRequest */
 export interface PowerRequest {
   /** Action */
   action: "start" | "stop" | "restart";
+  /**
+   * Stop Conflicting
+   * @default false
+   */
+  stop_conflicting?: boolean;
 }
 
 /**
@@ -576,6 +624,8 @@ export interface SessionInfo {
   auth_enabled: boolean;
   /** Username */
   username?: string | null;
+  /** Admin */
+  admin: boolean;
 }
 
 /**
@@ -908,7 +958,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
 /**
  * @title Game Server Dashboard API
- * @version 0.6.0
+ * @version 0.8.0
  *
  * API for managing and monitoring game servers
  */
@@ -916,7 +966,7 @@ export class Api<
   SecurityDataType extends unknown,
 > extends HttpClient<SecurityDataType> {
   /**
-   * @description Get all game servers from the database.
+   * @description Get the game servers the caller may see: all of them when logged in, the public ones otherwise.
    *
    * @tags servers
    * @name GetServers
@@ -989,7 +1039,7 @@ export class Api<
   };
   me = {
     /**
-     * @description Whether login is required and who the caller is. Returns 401 for a missing or expired token.
+     * @description Who the caller is: a visitor, a logged-in user, or anyone with login disabled. 401 for a rejected token.
      *
      * @tags auth
      * @name GetSession
@@ -1014,13 +1064,11 @@ export class Api<
      * @name GetSupportedServerTypes
      * @summary Supported Types
      * @request GET:/api/servers/supported_types
-     * @secure
      */
     getSupportedServerTypes: (params: RequestParams = {}) =>
       this.request<GameServerType[], any>({
         path: `/api/servers/supported_types`,
         method: "GET",
-        secure: true,
         format: "json",
         ...params,
       }),
@@ -1033,20 +1081,18 @@ export class Api<
      * @name GetGameTypes
      * @summary Game Types
      * @request GET:/api/servers/game-types
-     * @secure
      */
     getGameTypes: (params: RequestParams = {}) =>
       this.request<GameTypeInfo[], any>({
         path: `/api/servers/game-types`,
         method: "GET",
-        secure: true,
         format: "json",
         ...params,
       }),
   };
   liveInfo = {
     /**
-     * @description Get live information for every server at once (queried concurrently).
+     * @description Get live information for every visible server at once (queried concurrently).
      *
      * @tags servers
      * @name GetAllServersLiveInfo
@@ -1107,7 +1153,7 @@ export class Api<
   };
   byType = {
     /**
-     * @description Get all servers of a specific game type.
+     * @description Get the visible servers of a specific game type.
      *
      * @tags servers
      * @name GetServersByType
@@ -1207,7 +1253,7 @@ export class Api<
       }),
 
     /**
-     * @description Start, stop or restart the container behind a Docker-linked server.
+     * @description Start, stop or restart the container behind a Docker-linked server. A start answers 409 with the containers that hold its host ports; repeat it with `stop_conflicting` to stop those servers first.
      *
      * @tags servers
      * @name PowerServer
@@ -1220,7 +1266,7 @@ export class Api<
       data: PowerRequest,
       params: RequestParams = {},
     ) =>
-      this.request<HostStats, HTTPValidationError>({
+      this.request<HostStats, PowerConflict | HTTPValidationError>({
         path: `/api/servers/${serverId}/power`,
         method: "POST",
         body: data,
@@ -1308,7 +1354,7 @@ export class Api<
   };
   discovered = {
     /**
-     * @description Containers that look like game servers, with the server they are linked to (if imported). Calling this also imports labelled and well-known containers.
+     * @description Containers that look like game servers, with the server they are linked to (if imported).
      *
      * @tags docker
      * @name GetDiscoveredContainers
@@ -1342,6 +1388,25 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  importAll = {
+    /**
+     * @description Import every running, labelled or well-known game-server container that is not in the fleet yet.
+     *
+     * @tags docker
+     * @name ImportAllContainers
+     * @summary Import All
+     * @request POST:/api/docker/import-all
+     * @secure
+     */
+    importAllContainers: (params: RequestParams = {}) =>
+      this.request<GameServerPublic[], any>({
+        path: `/api/docker/import-all`,
+        method: "POST",
+        secure: true,
         format: "json",
         ...params,
       }),

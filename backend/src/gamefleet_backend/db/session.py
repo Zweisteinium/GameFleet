@@ -38,6 +38,8 @@ LEGACY_SCHEMA_UPGRADES = [
     "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS data_path VARCHAR(300)",
     "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS world_path VARCHAR(300)",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_gameserver_container_name ON gameserver (container_name)",
+    # 0.8: visitors without a login only see servers flagged public.
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 

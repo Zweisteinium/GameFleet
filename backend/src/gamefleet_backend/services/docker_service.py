@@ -7,6 +7,7 @@ import asyncio
 import io
 import logging
 import os
+import re
 import tarfile
 import time
 from typing import Any, Optional
@@ -22,6 +23,11 @@ log = logging.getLogger(__name__)
 SERVER_ADDRESS = os.getenv("DOCKER_SERVER_ADDRESS", "127.0.0.1")
 STATS_MIN_INTERVAL = float(os.getenv("DOCKER_STATS_INTERVAL", "10"))  # seconds between two stats samples
 SIZES_MIN_INTERVAL = float(os.getenv("DOCKER_SIZES_INTERVAL", "300"))  # `du` is the expensive part
+COMPOSE_PROJECT, COMPOSE_DIR = "com.docker.compose.project", "com.docker.compose.project.working_dir"
+# An image whose tag moved to a newer pull is listed by its bare id.
+IMAGE_ID = re.compile(r"^(sha256:)?[0-9a-f]{12,64}$")
+WILDCARD_IPS = {"", "0.0.0.0", "::"}
+STATES_MAX_AGE = 5.0  # seconds the container-state snapshot is shared between live queries
 POWER_TIMEOUT = 45  # seconds a container gets to shut down cleanly before it is killed
 
 
@@ -47,7 +53,26 @@ def map_container(c: dict[str, Any]) -> ContainerInfo:
         ports=sorted(ports, key=lambda p: (p.container_port, p.protocol)),
         mounts=mounts,
         labels=c.get("Labels") or {},
+        compose_project=(c.get("Labels") or {}).get(COMPOSE_PROJECT),
+        compose_dir=(c.get("Labels") or {}).get(COMPOSE_DIR),
     )
+
+
+def bindings_from_inspect(attrs: dict[str, Any]) -> list[dict[str, Any]]:
+    """Configured port bindings in the list API's `Ports` shape (they exist whether the container runs or not)."""
+    ports: list[dict[str, Any]] = []
+    bound = (attrs.get("HostConfig") or {}).get("PortBindings") or {}
+    for spec, targets in bound.items():
+        private, _, proto = spec.partition("/")
+        for target in targets or []:
+            if target.get("HostPort"):
+                ports.append({"PrivatePort": int(private), "PublicPort": int(target["HostPort"]),
+                              "Type": proto or "tcp", "IP": target.get("HostIp") or "0.0.0.0"})
+    for spec in (attrs.get("Config") or {}).get("ExposedPorts") or {}:
+        if spec not in bound:
+            private, _, proto = spec.partition("/")
+            ports.append({"PrivatePort": int(private), "Type": proto or "tcp"})
+    return ports
 
 
 def container_ip(c: dict[str, Any]) -> Optional[str]:
@@ -77,6 +102,11 @@ class DockerService:
         self._stats: dict[str, HostStats] = {}
         self._sizes: dict[str, tuple[float, Optional[int], Optional[int]]] = {}
         self._locks: dict[str, asyncio.Lock] = {}
+        # name -> state of every container, from one list call (live queries ask per server, in parallel).
+        self._states: Optional[tuple[float, dict[str, str]]] = None
+        self._states_lock = asyncio.Lock()
+        # Container id -> what `complete` learned from inspect. Image and bindings never change for an id.
+        self._completed: dict[str, dict[str, Any]] = {}
 
     # ---- connection -------------------------------------------------------------------------------------
 
@@ -123,6 +153,61 @@ class DockerService:
         containers = await self._call(lambda c: c.api.containers(all=True, filters={"name": f"^/{name}$"}))
         return containers[0] if containers else None
 
+    async def complete(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """Fill the gaps of the list representation from inspect: a stopped container lists no published
+        ports, and an image whose tag moved on is listed by id. Hosts with many instances of one game,
+        most of them stopped, need both to be told apart and mapped to the right port."""
+        ports = raw.get("Ports") or []
+        needs_ports = raw.get("State") != "running" and not any(p.get("PublicPort") for p in ports)
+        needs_image = bool(IMAGE_ID.match(raw.get("Image", "")))
+        if not (needs_ports or needs_image):
+            return raw
+        patch = self._completed.get(raw["Id"])
+        if patch is None:
+            try:
+                attrs = await self.inspect(raw["Id"])
+            except (docker.errors.DockerException, OSError):
+                return raw
+            patch = {"Image": (attrs.get("Config") or {}).get("Image"), "Ports": bindings_from_inspect(attrs)}
+            self._completed[raw["Id"]] = patch
+        result = dict(raw)
+        if needs_image and patch["Image"]:
+            result["Image"] = patch["Image"]
+        if needs_ports and patch["Ports"]:
+            result["Ports"] = patch["Ports"]
+        return result
+
+    async def port_conflicts(self, name: str) -> dict[str, list[str]]:
+        """Running containers that hold a host port this container wants: {container: ["25565/tcp"]}.
+        Only Docker's own bindings are visible from here; a port taken by a host process surfaces when
+        Docker refuses the start."""
+        attrs = await self.inspect(name)
+        wanted = [p for p in bindings_from_inspect(attrs) if p.get("PublicPort")]
+        conflicts: dict[str, list[str]] = {}
+        for other in await self.list_raw():
+            other_name = map_container(other).name
+            if other.get("State") != "running" or other["Id"] == attrs.get("Id"):
+                continue
+            for held in other.get("Ports") or []:
+                for want in wanted:
+                    if (held.get("PublicPort") == want["PublicPort"] and held.get("Type", "tcp") == want["Type"]
+                            and (held.get("IP", "") in WILDCARD_IPS or want["IP"] in WILDCARD_IPS or held.get("IP") == want["IP"])):
+                        label = f"{want['PublicPort']}/{want['Type']}"
+                        if label not in conflicts.setdefault(other_name, []):
+                            conflicts[other_name].append(label)
+        return conflicts
+
+    async def states(self) -> Optional[dict[str, str]]:
+        """State of every container by name, or None when Docker cannot be asked."""
+        async with self._states_lock:
+            if self._states is None or time.monotonic() - self._states[0] > STATES_MAX_AGE:
+                try:
+                    containers = await self.list_raw()
+                except (DockerUnavailable, docker.errors.DockerException, OSError):
+                    return None
+                self._states = (time.monotonic(), {map_container(c).name: c.get("State", "unknown") for c in containers})
+            return self._states[1]
+
     async def inspect(self, name: str) -> dict[str, Any]:
         return await self._call(lambda c: c.api.inspect_container(name))
 
@@ -155,13 +240,15 @@ class DockerService:
     async def power(self, name: str, action: str) -> dict[str, Any]:
         def run(c: docker.DockerClient):
             container = c.containers.get(name)
+            # A longer stop_grace_period from the compose file wins: big worlds need their time to save.
+            timeout = max(POWER_TIMEOUT, (container.attrs.get("Config") or {}).get("StopTimeout") or 0)
             match action:
                 case "start":
                     container.start()
                 case "stop":
-                    container.stop(timeout=POWER_TIMEOUT)
+                    container.stop(timeout=timeout)
                 case "restart":
-                    container.restart(timeout=POWER_TIMEOUT)
+                    container.restart(timeout=timeout)
                 case _:
                     raise ValueError(f"Unknown action {action}")
             container.reload()
@@ -210,6 +297,8 @@ class DockerService:
             status="running" if state.get("Running") else state.get("Status", ""),
             started_at=state.get("StartedAt") if state.get("Running") else None,
             sampled_at=now,
+            compose_project=((attrs.get("Config") or {}).get("Labels") or {}).get(COMPOSE_PROJECT),
+            compose_dir=((attrs.get("Config") or {}).get("Labels") or {}).get(COMPOSE_DIR),
         )
         if raw is None:
             self._samples.pop(name, None)
@@ -270,6 +359,7 @@ class DockerService:
     def forget(self, name: str) -> None:
         for store in (self._samples, self._stats, self._sizes, self._locks):
             store.pop(name, None)
+        self._states = None
 
 
 docker_service = DockerService()

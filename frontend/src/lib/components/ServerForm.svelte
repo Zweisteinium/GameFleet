@@ -30,6 +30,7 @@
 	let queryPort = $state<number | null>(seed?.query_port ?? null);
 	let rconPort = $state<number | null>(seed?.rcon_port ?? null);
 	let rconPassword = $state('');
+	let isPublic = $state(seed?.is_public ?? false);
 	let saving = $state(false);
 	let error = $state<string | null>(null);
 
@@ -64,6 +65,7 @@
 				port,
 				query_port: queryPort || null,
 				rcon_port: rconPort || null,
+				is_public: isPublic,
 				...(rconPassword ? { rcon_password: rconPassword } : {})
 			};
 			const response = initial
@@ -202,6 +204,17 @@
 			</p>
 		</div>
 	{/if}
+
+	<label class="flex cursor-pointer items-start gap-3 text-sm">
+		<input type="checkbox" class="accent-accent mt-0.5 h-4 w-4" bind:checked={isPublic} />
+		<span>
+			Show on the public dashboard
+			<span class="text-ink-3 block text-xs"
+				>Visitors who are not signed in see this server's status and players, never its RCON or host
+				details.</span
+			>
+		</span>
+	</label>
 
 	{#if error}
 		<p

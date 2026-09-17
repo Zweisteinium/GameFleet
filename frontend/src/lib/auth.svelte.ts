@@ -3,8 +3,9 @@ import { api } from '$lib/api/ApiService';
 const TOKEN_KEY = 'gamefleet:token';
 
 /**
- * Login state. The bearer token lives in localStorage (the SPA and the API are separate origins, so a
- * cookie session would need cross-site cookies); `authEnabled` mirrors the backend's configuration.
+ * Login state. Without a token the dashboard runs in public mode: visitors see the servers flagged public
+ * and none of the controls. The bearer token lives in localStorage; `authEnabled` mirrors the backend's
+ * configuration (login switched off means everyone is an admin).
  */
 export const session = $state<{
 	token: string | null;
@@ -19,6 +20,7 @@ export const session = $state<{
 	checked: false
 });
 
+/** Whether the viewer may see and change everything (logged in, or login is switched off). */
 export const loggedIn = () => !session.authEnabled || session.token !== null;
 
 function loadToken(): string | null {
