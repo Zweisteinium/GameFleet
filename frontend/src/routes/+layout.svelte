@@ -1,10 +1,10 @@
 <script lang="ts">
 	import '../app.css';
-	import favicon from '$lib/assets/favicon.svg';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 		import { session, loggedIn, logout } from '$lib/auth.svelte';
 
 	let { children } = $props();
@@ -22,10 +22,6 @@
 		window.location.assign(resolve('/main'));
 	}
 </script>
-
-<svelte:head>
-	<link rel="icon" href={favicon} />
-</svelte:head>
 
 <div class="relative min-h-screen">
 	<div class="page-tint pointer-events-none absolute inset-x-0 top-0 h-80"></div>
@@ -50,7 +46,7 @@
 				>
 					Servers
 				</a>
-				{#if loggedIn()}
+				{#if session.dev && loggedIn()}
 					<a
 						href="/swagger"
 						target="_blank"
@@ -78,13 +74,27 @@
 	</header>
 
 	<main class="relative z-10 mx-auto max-w-[90rem] px-4 pb-16 sm:px-6">
+		{#if session.checked && session.dev}
+			<p
+				class="border-accent/30 bg-accent-soft text-accent mt-2 flex items-center gap-2 rounded-xl border px-4 py-2 text-xs"
+			>
+				<Icon name="info" size={14} />
+				Development mode: API docs are exposed and logging is verbose. Not intended for production; set
+				<code class="font-mono">GAMEFLEET_ENV=prod</code>.
+			</p>
+		{/if}
 		{#if session.checked && !session.authEnabled && !onLoginPage}
 			<p
 				class="mt-2 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-800 dark:text-amber-300"
 			>
 				<Icon name="alert" size={14} />
-				Login is disabled: set <code class="font-mono">GAMEFLEET_USERS</code> on the backend to protect
-				this dashboard.
+				{#if session.admin}
+					Login is disabled and everyone can manage this dashboard: set
+					<code class="font-mono">GAMEFLEET_USERS</code> on the backend.
+				{:else}
+					No users are configured, so this dashboard is read-only: set
+					<code class="font-mono">GAMEFLEET_USERS</code> on the backend to sign in and manage servers.
+				{/if}
 			</p>
 		{/if}
 		{#if session.checked}
@@ -92,3 +102,5 @@
 		{/if}
 	</main>
 </div>
+
+<ConfirmDialog />

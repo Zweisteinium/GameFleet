@@ -3,6 +3,7 @@
 	import { formatBytes, formatUptime, hostStateLabel, hostTone } from '$lib/gameinfo';
 	import Icon from './Icon.svelte';
 	import Skeleton from './Skeleton.svelte';
+	import { confirmDialog } from '$lib/confirm.svelte';
 
 	type PowerAction = 'start' | 'stop' | 'restart';
 
@@ -47,12 +48,17 @@
 		ratio >= 0.9 ? 'danger' : ratio >= 0.7 ? 'warning' : 'success';
 
 	async function run(action: PowerAction) {
-		const prompts: Record<PowerAction, string | null> = {
-			start: null,
-			stop: `Stop "${server.name}"? Players will be disconnected.`,
-			restart: `Restart "${server.name}"? Players will be disconnected.`
-		};
-		if (prompts[action] && !confirm(prompts[action])) return;
+		if (action !== 'start') {
+			const label = action === 'stop' ? 'Stop' : 'Restart';
+			const go = await confirmDialog({
+				title: `${label} server`,
+				message: `${label} "${server.name}"?`,
+				note: 'Players will be disconnected.',
+				confirmLabel: label,
+				tone: 'danger'
+			});
+			if (!go) return;
+		}
 		busy = action;
 		error = null;
 		try {
