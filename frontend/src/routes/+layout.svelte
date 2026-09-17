@@ -2,7 +2,6 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -12,18 +11,15 @@
 
 	const onLoginPage = $derived(page.url.pathname.startsWith('/login'));
 
-	// Route guard: every page except /login needs a session (or auth switched off on the backend).
-	$effect(() => {
-		if (session.checked && !loggedIn() && !onLoginPage) {
-			const next = page.url.pathname + page.url.search;
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() cannot carry a query string
-			goto(`${resolve('/login')}?next=${encodeURIComponent(next)}`, { replaceState: true });
-		}
-	});
+	// No route guard: visitors without a login get the public view of every page.
+	const loginHref = $derived(
+		`${resolve('/login')}?next=${encodeURIComponent(page.url.pathname + page.url.search)}`
+	);
 
 	function signOut() {
 		logout();
-		goto(resolve('/login'));
+		// A full reload drops everything the admin view had loaded.
+		window.location.assign(resolve('/main'));
 	}
 </script>
 
@@ -47,14 +43,14 @@
 			</a>
 
 			<nav class="flex items-center gap-1">
+				<a
+					href={resolve('/main')}
+					class="btn-ghost h-9 px-3 text-sm"
+					aria-current={page.url.pathname.startsWith('/main') ? 'page' : undefined}
+				>
+					Servers
+				</a>
 				{#if loggedIn()}
-					<a
-						href={resolve('/main')}
-						class="btn-ghost h-9 px-3 text-sm"
-						aria-current={page.url.pathname.startsWith('/main') ? 'page' : undefined}
-					>
-						Servers
-					</a>
 					<a
 						href="/swagger"
 						target="_blank"
@@ -71,6 +67,11 @@
 						<span class="hidden sm:inline">{session.username}</span>
 						<Icon name="log-out" size={15} />
 					</button>
+				{:else if session.checked && session.authEnabled && !onLoginPage}
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() cannot carry a query string -->
+					<a href={loginHref} class="btn-ghost h-9 px-3 text-sm">
+						<Icon name="user" size={15} class="text-ink-3" />Sign in
+					</a>
 				{/if}
 			</nav>
 		</div>
@@ -86,7 +87,7 @@
 				this dashboard.
 			</p>
 		{/if}
-		{#if session.checked && (loggedIn() || onLoginPage)}
+		{#if session.checked}
 			{@render children?.()}
 		{/if}
 	</main>

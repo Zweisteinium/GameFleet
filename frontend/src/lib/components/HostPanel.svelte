@@ -58,8 +58,10 @@
 		try {
 			await onPower(action);
 		} catch (err) {
-			const detail = (err as { error?: { detail?: string } })?.error?.detail;
-			error = detail ?? `Could not ${action} the container.`;
+			const detail = (err as { error?: { detail?: string | { message?: string } } })?.error?.detail;
+			error =
+				(typeof detail === 'string' ? detail : detail?.message) ??
+				`Could not ${action} the container.`;
 		} finally {
 			busy = null;
 		}
@@ -221,8 +223,12 @@
 			</div>
 		</div>
 
-		{#if server.world_path || server.data_path}
+		{#if server.world_path || server.data_path || stats?.compose_dir}
 			<p class="text-ink-3 mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+				{#if stats?.compose_dir}<span class="meta" title="Compose project {stats.compose_project ?? ''}"
+						><Icon name="box" size={13} />compose
+						<span class="font-mono">{stats.compose_dir}</span></span
+					>{/if}
 				{#if server.data_path}<span class="meta"
 						><Icon name="folder" size={13} />data <span class="font-mono">{server.data_path}</span
 						></span

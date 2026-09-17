@@ -4,6 +4,7 @@
 	import { ServerStatus, type DiscoveredContainer, type GameServerPublic } from '$lib/api/Api';
 	import { gameLabel } from '$lib/games';
 	import { live, restoreLive, refreshServers } from '$lib/live.svelte';
+	import { loggedIn } from '$lib/auth.svelte';
 	import { loadPref, savePref } from '$lib/prefs';
 	import ServerCard from '$lib/components/ServerCard.svelte';
 	import ServerForm from '$lib/components/ServerForm.svelte';
@@ -31,7 +32,21 @@
 	let lastRefresh = $state<Date | null>(null);
 	let toolbar = $state<ToolbarState>(DEFAULT_TOOLBAR);
 	let discovered = $state<DiscoveredContainer[]>([]);
+	let importing = $state(false);
 	let refreshTimer: ReturnType<typeof setInterval>;
+
+	/** Visitors get the public servers and no controls. */
+	const admin = $derived(loggedIn());
+	/** What "Import from Docker" takes: running containers that are certainly game servers. */
+	const importable = $derived(
+		discovered.filter(
+			(item) =>
+				!item.server_id &&
+				!item.ignored &&
+				item.container.state === 'running' &&
+				(item.detected?.confidence === 'label' || item.detected?.confidence === 'image')
+		)
+	);
 
 	const serverLiveInfo = $derived(live.info);
 	const infos = $derived(gameServers.map((s) => live.info[s.id]).filter(Boolean));
@@ -102,19 +117,29 @@
 		}
 	}
 
-	/** Docker discovery also imports labelled/known containers, so the server list is reloaded afterwards. */
 	async function loadDiscovered() {
+		if (!admin) {
+			discovered = [];
+			return;
+		}
 		try {
 			const status = (await api.status.getDockerStatus()).data;
 			if (!status.available) return;
 			discovered = (await api.discovered.getDiscoveredContainers()).data;
-			const known = new Set(gameServers.map((s) => s.id));
-			if (discovered.some((item) => item.server_id && !known.has(item.server_id))) {
-				await loadServers();
-				await refreshLiveInfo();
-			}
 		} catch (error) {
 			console.error('Docker discovery failed:', error);
+		}
+	}
+
+	async function importFromDocker() {
+		importing = true;
+		try {
+			await api.importAll.importAllContainers();
+			await onDiscoveryChanged();
+		} catch (error) {
+			console.error('Docker import failed:', error);
+		} finally {
+			importing = false;
 		}
 	}
 
@@ -145,6 +170,14 @@
 	});
 
 	onDestroy(() => clearInterval(refreshTimer));
+
+	// A session that ends (expired token) or starts changes what the backend returns: load it again.
+	let loadedAsAdmin: boolean | null = null;
+	$effect(() => {
+		const now = admin;
+		if (loadedAsAdmin !== null && loadedAsAdmin !== now && !loading) onDiscoveryChanged();
+		loadedAsAdmin = now;
+	});
 
 	$effect(() => {
 		savePref('dashboard', $state.snapshot(toolbar));
@@ -183,10 +216,27 @@
 				<Icon name="refresh" size={16} class={refreshing ? 'animate-spin' : ''} />
 				<span class="hidden sm:inline">Refresh</span>
 			</button>
-			<button class="btn-primary" onclick={() => (showForm = true)}>
-				<Icon name="plus" size={16} />
-				Add server
-			</button>
+			{#if admin}
+				{#if importable.length}
+					<button
+						class="btn-outline"
+						onclick={importFromDocker}
+						disabled={importing}
+						title="Import the running game-server containers found on this host: {importable
+							.map((item) => item.container.name)
+							.join(', ')}"
+					>
+						<Icon name="download" size={16} />
+						<span class="hidden sm:inline"
+							>{importing ? 'Importing…' : `Import from Docker (${importable.length})`}</span
+						>
+					</button>
+				{/if}
+				<button class="btn-primary" onclick={() => (showForm = true)}>
+					<Icon name="plus" size={16} />
+					Add server
+				</button>
+			{/if}
 		</div>
 	</div>
 
@@ -201,14 +251,22 @@
 			>
 				<Icon name="sparkles" size={26} />
 			</span>
-			<h2 class="font-display text-xl font-semibold">Your fleet is empty</h2>
-			<p class="text-ink-2 mx-auto mt-2 mb-6 max-w-sm text-sm">
-				Add a game server and GameFleet will keep an eye on its status, players and details for you.
-			</p>
-			<button class="btn-primary" onclick={() => (showForm = true)}>
-				<Icon name="plus" size={16} />
-				Add your first server
-			</button>
+			{#if admin}
+				<h2 class="font-display text-xl font-semibold">Your fleet is empty</h2>
+				<p class="text-ink-2 mx-auto mt-2 mb-6 max-w-sm text-sm">
+					Add a game server and GameFleet will keep an eye on its status, players and details for
+					you.
+				</p>
+				<button class="btn-primary" onclick={() => (showForm = true)}>
+					<Icon name="plus" size={16} />
+					Add your first server
+				</button>
+			{:else}
+				<h2 class="font-display text-xl font-semibold">No public servers</h2>
+				<p class="text-ink-2 mx-auto mt-2 max-w-sm text-sm">
+					Nothing is shared publicly yet. Sign in to see and manage the whole fleet.
+				</p>
+			{/if}
 		</div>
 	{:else}
 		<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -224,7 +282,9 @@
 			<StatCard icon="users" title="Players" value={totalPlayers} tone="accent" size="sm" />
 		</div>
 
-		<DiscoveredContainers items={discovered} onChanged={onDiscoveryChanged} />
+		{#if admin}
+			<DiscoveredContainers items={discovered} onChanged={onDiscoveryChanged} />
+		{/if}
 
 		<Toolbar bind:state={toolbar} {availableGames} resultCount={visibleServers.length} />
 

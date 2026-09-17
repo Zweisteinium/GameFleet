@@ -18,7 +18,7 @@ A small, self-hosted dashboard for your game servers. It shows which servers are
 - Live status, player counts and player names (where the game publishes them), refreshed every 30 seconds
 - Per-game details: Minecraft MOTD and server icon, ARK day/cluster/mods, Factorio evolution and tags, raw A2S rules for Steam games
 - Game servers running in Docker on the same host are found automatically, can be started, stopped and restarted from the dashboard, and show CPU, memory, data and world size
-- Login with users from an environment variable
+- Public by default: visitors see the servers you mark as public; signing in (users from an environment variable) unlocks the rest, including adding, editing and controlling servers
 - Real game artwork, downloaded once and cached locally by the backend
 - Light and dark theme
 - FastAPI backend with OpenAPI docs, SvelteKit frontend, PostgreSQL storage
@@ -43,9 +43,13 @@ The **port** of a server is always the port players connect to. The query port a
 
 With the Docker socket mounted into the backend (the compose files do this), GameFleet looks at every container on the host and recognises game servers in three ways, most reliable first:
 
-1. **Labels** on the container are authoritative and always imported: `gamefleet.game=factorio` is enough; `gamefleet.name`, `gamefleet.port`, `gamefleet.query_port`, `gamefleet.rcon_port`, `gamefleet.rcon_password` / `gamefleet.rcon_password_env` / `gamefleet.rcon_password_file`, `gamefleet.data_path` and `gamefleet.world_path` refine it, `gamefleet.ignore=true` hides a container.
-2. **Known images** (`itzg/minecraft-server`, `factoriotools/factorio`, `lloesche/valheim-server`, `thijsvanloef/palworld-server-docker`, `wolveix/satisfactory-server`, `cm2network/*` and more, see `models/container_catalog.py`) are imported automatically when `DOCKER_AUTO_IMPORT` is on. The catalog also knows where each image keeps its data and how it is given its RCON password, so a Factorio or Minecraft container needs no configuration at all.
+1. **Labels** on the container are authoritative: `gamefleet.game=factorio` is enough; `gamefleet.name`, `gamefleet.port`, `gamefleet.query_port`, `gamefleet.rcon_port`, `gamefleet.rcon_password` / `gamefleet.rcon_password_env` / `gamefleet.rcon_password_file`, `gamefleet.data_path` and `gamefleet.world_path` refine it, `gamefleet.ignore=true` hides a container.
+2. **Known images** (`itzg/minecraft-server`, `factoriotools/factorio`, `lloesche/valheim-server`, `thijsvanloef/palworld-server-docker`, `wolveix/satisfactory-server`, `cm2network/*` and more, see `models/container_catalog.py`) are recognised with certainty. The catalog also knows where each image keeps its data and how it is given its RCON password, so a Factorio or Minecraft container needs no configuration at all.
 3. **Names and ports** only produce a suggestion: a container called `my-valheim` or one that exposes 34197/udp shows up in the "Containers on this host" panel with a game dropdown and an Import button.
+
+Nothing is imported on its own. **Import from Docker** on the dashboard (signed in) takes every running container from the first two groups at once; the panel imports single containers, including stopped ones and guesses. Stopped containers are left out of the bulk import because several of them may claim the same host port, and a linked server whose container is not running is shown as offline instead of being queried.
+
+Hosts with many instances of one game are the normal case: a compose directory per server, most of them stopped, all on the game's default port. Stopped containers are read through their configured port bindings, an image whose tag moved on to a newer pull is resolved to its name, and the panels show each container's compose directory. Starting a server whose host port is held by another running server asks whether to stop that one first; a port held by a container that is not in the fleet, or by a process on the host, is reported and nothing is stopped. GameFleet only sees containers that exist: a compose project that was taken `down` has none until it is created again with `docker compose up --no-start` or `up -d`.
 
 Ports are translated to what is reachable from the host (published port, or the container's own address when nothing is published), the container name is the link, so `docker compose up` recreating a container keeps it attached, and a changed address or port mapping is picked up on the next discovery run. Imported servers get a **Host container** panel with start/stop/restart, CPU and memory (one Docker stats sample per refresh, cached for 10 s), and the size of the data and world directories (`du` inside the container, cached for 5 min). Removing an imported server hides the container from discovery; it can be shown again from the panel.
 
@@ -63,7 +67,7 @@ make db                   # optional: PostgreSQL 16 container using the DB_* val
 make up                   # builds and starts backend + frontend in the background
 ```
 
-- Dashboard: http://localhost:3000 (log in with a user from `GAMEFLEET_USERS`)
+- Dashboard: http://localhost:3000 (public view; sign in with a user from `GAMEFLEET_USERS` to manage servers)
 - API docs: http://localhost:8000/swagger (also proxied at http://localhost:3000/swagger)
 
 `FRONTEND_PORT` and `BACKEND_PORT` in `.env` are the only ports to set. The frontend forwards `/api` to the backend
@@ -71,7 +75,7 @@ inside the compose network, so browsers on the LAN need nothing but the frontend
 
 The database schema is created and upgraded automatically when the backend starts. Game artwork is cached in the `gamefleet-assets` volume.
 
-Prebuilt images are published as `h3xachad/gamefleet-backend` and `h3xachad/gamefleet-frontend`: `docker compose pull && docker compose up -d` runs them without building.
+Prebuilt images are published as `lordlayer/gamefleet_backend` and `lordlayer/gamefleet_frontend`: `docker compose pull && docker compose up -d` runs them without building.
 
 ## Configuration
 
@@ -84,9 +88,8 @@ One `.env` in the repository root configures everything: `docker-compose.yml` re
 | `BACKEND_PORT` | `8000` | Published backend port (API and Swagger UI) |
 | `FRONTEND_PORT` | `3000` | Published frontend port; the frontend proxies `/api` to the backend |
 | `ASSET_CACHE_DIR` | `data/assets` | Where the backend stores downloaded game artwork |
-| `GAMEFLEET_USERS` | – | Login users, `name:password,name2:password2`. Passwords in plain text or scrypt hashes from `make hash` (`$` becomes `$$` in `.env`). Empty disables login. |
+| `GAMEFLEET_USERS` | – | Login users, `name:password,name2:password2`. Passwords in plain text or scrypt hashes from `make hash` (`$` becomes `$$` in `.env`). Without a login, visitors only see servers marked public. Empty disables login and makes everyone an admin. |
 | `GAMEFLEET_SECRET` | random per start | Signs login tokens (30 days, `GAMEFLEET_SESSION_HOURS`); set it so logins survive restarts |
-| `DOCKER_AUTO_IMPORT` | `true` | Import containers with known game-server images automatically |
 | `DOCKER_SERVER_ADDRESS` | `host.docker.internal` in Docker, `127.0.0.1` natively | Address imported containers are queried at |
 | `DOCKER_DISCOVERY_INTERVAL` | `60` | Seconds between background discovery runs, `0` disables |
 | `UV_LINK_MODE` | – | Set to `copy` if your uv cache and project live on different filesystems |

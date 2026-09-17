@@ -35,7 +35,8 @@ app = FastAPI(
 
 protected = [Depends(current_user)]
 app.include_router(auth_api.router, prefix="/api/auth", tags=["auth"])
-app.include_router(servers.router, prefix="/api/servers", tags=["servers"], dependencies=protected)
+# Reading servers is open to visitors (limited to public servers); the router protects everything else itself.
+app.include_router(servers.router, prefix="/api/servers", tags=["servers"])
 app.include_router(docker.router, prefix="/api/docker", tags=["docker"], dependencies=protected)
 # Artwork stays public: it is loaded through <img> tags, which cannot send a bearer token.
 app.include_router(games.router, prefix="/api/games", tags=["games"])

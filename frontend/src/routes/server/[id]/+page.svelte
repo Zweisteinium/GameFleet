@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { onMount, onDestroy } from 'svelte';
 	import { api } from '$lib/api/ApiService';
-	import type { GameServerPublic } from '$lib/api/Api';
+	import type { GameServerPublic, PowerConflictDetail } from '$lib/api/Api';
 	import { gameArtUrl, gameLabel, isMinecraft } from '$lib/games';
 	import { capabilities, overviewTiles, playersEmptyMessage } from '$lib/gameinfo';
 	import {
@@ -22,6 +22,7 @@
 	import ServerForm from '$lib/components/ServerForm.svelte';
 	import ServerProperties from '$lib/components/ServerProperties.svelte';
 	import HostPanel from '$lib/components/HostPanel.svelte';
+	import { loggedIn } from '$lib/auth.svelte';
 	import GameArt from '$lib/components/GameArt.svelte';
 	import PlayersBar from '$lib/components/PlayersBar.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -70,7 +71,21 @@
 
 	async function power(action: 'start' | 'stop' | 'restart') {
 		if (!server) return;
-		live.host[server.id] = (await api.serverId.powerServer(server.id, { action })).data;
+		try {
+			live.host[server.id] = (await api.serverId.powerServer(server.id, { action })).data;
+		} catch (err) {
+			// 409: another container holds this server's host port (instances of one game usually share it).
+			const detail = (err as { error?: { detail?: PowerConflictDetail } })?.error?.detail;
+			const holders = detail?.conflicts ?? [];
+			if (!holders.length || !holders.every((c) => c.server_id)) throw err;
+			const names = holders.map((c) => `"${c.server_name}"`).join(' and ');
+			const question = `${detail?.message}\n\nStop ${names} and start "${server.name}"? Players there will be disconnected.`;
+			if (!confirm(question)) return;
+			live.host[server.id] = (
+				await api.serverId.powerServer(server.id, { action, stop_conflicting: true })
+			).data;
+			for (const holder of holders) if (holder.server_id) refreshServer(holder.server_id);
+		}
 		// Give the game a moment to come up, then re-query it.
 		setTimeout(() => refreshServer(serverId), 3000);
 	}
@@ -205,12 +220,14 @@
 						<button class="btn-outline h-9" onclick={refreshLiveInfo} disabled={refreshing}>
 							<Icon name="refresh" size={15} class={refreshing ? 'animate-spin' : ''} />Refresh
 						</button>
-						<button class="btn-outline h-9" onclick={() => (editing = true)}
-							><Icon name="pencil" size={15} />Edit</button
-						>
-						<button class="btn-danger h-9" onclick={deleteServer}
-							><Icon name="trash" size={15} />Remove</button
-						>
+						{#if loggedIn()}
+							<button class="btn-outline h-9" onclick={() => (editing = true)}
+								><Icon name="pencil" size={15} />Edit</button
+							>
+							<button class="btn-danger h-9" onclick={deleteServer}
+								><Icon name="trash" size={15} />Remove</button
+							>
+						{/if}
 					</div>
 				</div>
 			</div>

@@ -24,6 +24,8 @@ class GameServerBase(SQLModel):
     # and for backup/restore later.
     data_path: Optional[str] = Field(default=None, max_length=300)
     world_path: Optional[str] = Field(default=None, max_length=300)
+    # Shown to visitors who are not logged in.
+    is_public: bool = Field(default=False)
 
 
 class GameServer(GameServerBase, table=True):
@@ -36,12 +38,18 @@ class IgnoredContainer(SQLModel, table=True):
     container_name: str = Field(primary_key=True, max_length=200)
 
 
+# What a visitor gets instead: how to reach the game, nothing about RCON or the host it runs on.
+VISITOR_VIEW = {"has_rcon": False, "rcon_port": None, "source": "manual", "container_name": None,
+                "data_path": None, "world_path": None}
+
+
 class GameServerPublic(GameServerBase):
     """API representation of a server: everything except secrets."""
     id: str
     has_rcon: bool = False
 
     @classmethod
-    def from_server(cls, server: GameServer) -> "GameServerPublic":
+    def from_server(cls, server: GameServer, admin: bool = True) -> "GameServerPublic":
         # Validate from attributes: table rows carry `game` as plain text and must be coerced back to the enum.
-        return cls.model_validate(server, from_attributes=True, update={"has_rcon": bool(server.rcon_password)})
+        update = {"has_rcon": bool(server.rcon_password)} if admin else VISITOR_VIEW
+        return cls.model_validate(server, from_attributes=True, update=update)

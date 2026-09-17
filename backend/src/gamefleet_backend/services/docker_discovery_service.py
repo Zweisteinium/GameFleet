@@ -1,9 +1,8 @@
 """Finds game servers among the Docker containers on this host and links them to GameFleet servers.
 
 A container becomes a GameFleet server with ``source = "docker"`` and ``container_name`` set. The name
-is the link (compose keeps it across recreations, the id does not). Containers with ``gamefleet.*``
-labels are always imported; containers whose image is in IMAGE_CATALOG are imported when
-DOCKER_AUTO_IMPORT is on; keyword and port guesses are only offered in the UI.
+is the link (compose keeps it across recreations, the id does not). Nothing is imported on its own:
+the user imports single containers, or all running ones that carry ``gamefleet.*`` labels or a known image.
 """
 import asyncio
 import logging
@@ -24,9 +23,9 @@ from gamefleet_backend.services.docker_service import (
 
 log = logging.getLogger(__name__)
 
-AUTO_IMPORT = os.getenv("DOCKER_AUTO_IMPORT", "true").lower() in ("1", "true", "yes", "on")
 DISCOVERY_INTERVAL = float(os.getenv("DOCKER_DISCOVERY_INTERVAL", "60"))  # seconds; 0 disables the loop
-AUTO_IMPORT_CONFIDENCE = {"label", "image"}
+# Detections that "import all" trusts; name and port guesses are imported one by one after a look.
+CERTAIN_CONFIDENCE = {"label", "image"}
 
 
 def _label_int(labels: dict[str, str], key: str) -> Optional[int]:
@@ -163,28 +162,39 @@ class DockerDiscoveryService:
     async def _ignored(self) -> set[str]:
         return {row.container_name for row in (await self.session.execute(select(IgnoredContainer))).scalars().all()}
 
-    async def discover(self, auto_import: bool = AUTO_IMPORT) -> list[DiscoveredContainer]:
-        """List candidate containers, importing the certain ones. Raises DockerUnavailable."""
+    async def discover(self) -> list[DiscoveredContainer]:
+        """List containers that look like game servers; nothing is imported. Raises DockerUnavailable."""
         raw_containers = await docker_service.list_raw()
         linked, ignored = await self._linked(), await self._ignored()
         results: list[DiscoveredContainer] = []
         for raw in raw_containers:
+            raw = await docker_service.complete(raw)
             info = map_container(raw)
             detected = detect(raw)
             server = linked.get(info.name)
             if detected is None and server is None:
                 continue
-            if server is None and detected and info.name not in ignored and (
-                detected.confidence == "label" or (auto_import and detected.confidence in AUTO_IMPORT_CONFIDENCE)
-            ):
-                server = await self.import_container(raw, detected)
-                log.info("Imported container %s as %s (%s)", info.name, detected.game.value, detected.confidence)
-            elif server and detected and detected.game == server.game:
+            # A container without published ports is reached at its own address, which only exists while it runs.
+            if server and detected and detected.game == server.game and info.state == "running":
                 await self._sync_endpoint(server, detected)
             results.append(DiscoveredContainer(
                 container=info, detected=detected, server_id=server.id if server else None, ignored=info.name in ignored
             ))
         return results
+
+    async def import_all(self) -> list[GameServer]:
+        """Import every running container that is certainly a game server and neither imported nor hidden.
+        Stopped containers are left out: several of them may claim the same host port."""
+        raw_by_name = {map_container(raw).name: raw for raw in await docker_service.list_raw()}
+        imported: list[GameServer] = []
+        for item in await self.discover():
+            detected = item.detected
+            if (item.server_id or item.ignored or detected is None or item.container.state != "running"
+                    or detected.confidence not in CERTAIN_CONFIDENCE):
+                continue
+            imported.append(await self.import_container(raw_by_name[item.container.name], detected))
+            log.info("Imported container %s as %s (%s)", item.container.name, detected.game.value, detected.confidence)
+        return imported
 
     async def _sync_endpoint(self, server: GameServer, detected: DetectedGame) -> None:
         """Follow the container when its reachable address or port mapping changed (compose edits, the backend
@@ -203,7 +213,9 @@ class DockerDiscoveryService:
     async def import_container(self, raw: dict[str, Any], detected: Optional[DetectedGame] = None,
                                game: Optional[GameServerType] = None, name: Optional[str] = None) -> GameServer:
         """Create (or re-sync) the GameFleet server for a container."""
+        raw = await docker_service.complete(raw)
         info = map_container(raw)
+        detected = detected or detect(raw)
         if game and (detected is None or detected.game != game):
             # The user picked a different game than detected: re-run detection as if it were labelled.
             raw = {**raw, "Labels": {**(raw.get("Labels") or {}), LABELS["game"]: game.value}}
@@ -248,7 +260,7 @@ class DockerDiscoveryService:
 
 
 async def discovery_loop() -> None:
-    """Background task: keeps labelled/known containers imported even when nobody has the dashboard open."""
+    """Background task: keeps address and ports of imported containers current when nobody has the dashboard open."""
     while True:
         try:
             async with async_session() as session:

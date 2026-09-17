@@ -9,6 +9,7 @@
 	import PlayersBar from './PlayersBar.svelte';
 	import Skeleton from './Skeleton.svelte';
 	import Icon from './Icon.svelte';
+	import { session, loggedIn } from '$lib/auth.svelte';
 
 	interface Props {
 		server: GameServerPublic;
@@ -36,6 +37,14 @@
 </script>
 
 {#snippet hostChip()}
+	{#if server.is_public && session.authEnabled && loggedIn()}
+		<span
+			class="bg-surface-2 text-ink-2 inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[10px] font-medium"
+			title="Visible without signing in"
+		>
+			<Icon name="eye" size={11} />Public
+		</span>
+	{/if}
 	{#if local}
 		<span
 			class="bg-surface-2 text-ink-2 inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[10px] font-medium"

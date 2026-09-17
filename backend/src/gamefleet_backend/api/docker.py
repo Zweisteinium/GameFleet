@@ -7,7 +7,7 @@ from gamefleet_backend.db.models.game_server import GameServerPublic
 from gamefleet_backend.dependencies import get_docker_discovery_service
 from gamefleet_backend.models.container_info import ContainerInfo, DiscoveredContainer, DockerStatus
 from gamefleet_backend.models.game_server_type import GameServerType
-from gamefleet_backend.services.docker_discovery_service import AUTO_IMPORT, DockerDiscoveryService
+from gamefleet_backend.services.docker_discovery_service import DockerDiscoveryService
 from gamefleet_backend.services.docker_service import DockerUnavailable, SERVER_ADDRESS, docker_service, map_container
 
 router = APIRouter()
@@ -28,7 +28,7 @@ def _unavailable(exc: DockerUnavailable) -> HTTPException:
 async def docker_status():
     """Whether the backend can talk to the Docker daemon (needs /var/run/docker.sock mounted)."""
     available, error = await docker_service.status()
-    return DockerStatus(available=available, error=error, auto_import=AUTO_IMPORT, address=SERVER_ADDRESS)
+    return DockerStatus(available=available, error=error, address=SERVER_ADDRESS)
 
 
 @router.get("/containers", response_model=list[ContainerInfo], operation_id="getContainers")
@@ -42,8 +42,7 @@ async def list_containers():
 
 @router.get("/discovered", response_model=list[DiscoveredContainer], operation_id="getDiscoveredContainers")
 async def discovered(service: DockerDiscoveryService = Depends(get_docker_discovery_service)):
-    """Containers that look like game servers, with the server they are linked to (if imported).
-    Calling this also imports labelled and well-known containers."""
+    """Containers that look like game servers, with the server they are linked to (if imported)."""
     try:
         return await service.discover()
     except DockerUnavailable as exc:
@@ -64,6 +63,15 @@ async def import_container(body: ImportRequest, service: DockerDiscoveryService 
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return GameServerPublic.from_server(server)
+
+
+@router.post("/import-all", response_model=list[GameServerPublic], operation_id="importAllContainers")
+async def import_all(service: DockerDiscoveryService = Depends(get_docker_discovery_service)):
+    """Import every running, labelled or well-known game-server container that is not in the fleet yet."""
+    try:
+        return [GameServerPublic.from_server(server) for server in await service.import_all()]
+    except DockerUnavailable as exc:
+        raise _unavailable(exc)
 
 
 @router.put("/ignored/{container_name}", operation_id="ignoreContainer")

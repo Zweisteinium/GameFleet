@@ -20,10 +20,16 @@ configuration, layout and make targets; this file holds only what is not obvious
   and `/openapi.json` to `BACKEND_URL`, so the API needs no CORS and the bundle contains no backend address. All
   ports and hosts come from `.env` through compose; nothing is baked into the images.
 - Auth is a stateless HMAC bearer token kept in localStorage. `/api/games` stays public so `<img>` can load artwork.
+- Public mode is the default: without a token the servers router returns only `is_public` servers, projected through
+  `VISITOR_VIEW` (no RCON, source, container or paths), and hidden servers answer 404. Writes, host stats, power and
+  the docker router need `current_user`. A rejected token is always a 401 (`optional_user`), never a silent downgrade.
 - The backend container is on the compose bridge network, reaches the host through `host.docker.internal`
   (`DB_HOST` default, `DOCKER_SERVER_ADDRESS`) and mounts the Docker socket. Docker-linked servers are keyed by
-  container name (compose recreates ids). `detect()` order is labels > `IMAGE_CATALOG` > keywords > unique default port; only
-  label and image matches auto-import. Deleting a docker server records its name in `ignoredcontainer`.
+  container name (compose recreates ids). `detect()` order is labels > `IMAGE_CATALOG` > keywords > unique default port; nothing
+  imports on its own, `import_all` takes running label and image matches. A linked server whose container is not
+  running is reported offline without a query (stopped containers can share a host port). `docker_service.complete`
+  fills list-API gaps from inspect (bindings of stopped containers, digest-only images). A start checks
+  `port_conflicts` first: 409 with the holders, `stop_conflicting` stops only containers that are GameFleet servers. Deleting a docker server records its name in `ignoredcontainer`.
 - Host stats are request-driven and cached (10 s for `stats`, 5 min for `du`); CPU% needs two samples, so the first
   request reports null. No background stats loop.
 - Backups/rollback are planned on top of `data_path`, `world_path` and `ContainerMount`; keep those fields populated.
@@ -39,7 +45,7 @@ Follow the README steps, plus: popular Docker images go into `IMAGE_CATALOG` and
 
 ## Versioning
 
-One version in `backend/pyproject.toml` and `frontend/package.json` (currently 0.7.1). Bump it in the same commit as a
+One version in `backend/pyproject.toml` and `frontend/package.json` (currently 0.8.0). Bump it in the same commit as a
 user-visible change: patch for fixes and dependency updates, minor for features or UI changes, major for breaking API or
 DB changes. Docs and tooling commits need no bump. Run `uv lock` after touching `pyproject.toml`; commit both lockfiles.
 
@@ -57,7 +63,7 @@ Run `make check` and `cd frontend && pnpm build` before declaring work done; rep
 
 Backend smoke test: `cd backend && GAMEFLEET_USERS=admin:secret uv run uvicorn gamefleet_backend.main:app --port 8010`,
 log in via `POST /api/auth/login`, then call `/api/servers`, `/api/servers/live-info`, `/api/docker/discovered` and
-`/api/servers/host-stats` with the bearer token. The dev database comes from `make db`; the frontend targets the spare
+`/api/servers/host-stats` with the bearer token, and `/api/servers` without one for the public view. The dev database comes from `make db`; the frontend targets the spare
 backend with `BACKEND_URL=http://localhost:8010 pnpm dev --port 3010`.
 
 Screenshots: `brave --headless=new --disable-gpu --no-sandbox --hide-scrollbars --window-size=1440,1100

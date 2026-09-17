@@ -98,7 +98,8 @@
 					<div class="min-w-0 flex-1 basis-48">
 						<p class="truncate font-mono text-sm font-semibold">{item.container.name}</p>
 						<p class="text-ink-3 truncate text-xs">
-							{item.container.image} · {item.container.status}
+							{item.container.image} · {item.container.status}{#if item.container.compose_dir}
+								· <span class="font-mono">{item.container.compose_dir}</span>{/if}
 						</p>
 					</div>
 					{#if detected}
