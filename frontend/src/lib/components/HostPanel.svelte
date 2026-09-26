@@ -34,10 +34,25 @@
 	};
 
 	const running = $derived(stats?.state === 'running');
-	const cpuRatio = $derived(
-		stats?.cpu_percent != null && stats.cpu_limit
-			? Math.min(1, stats.cpu_percent / (stats.cpu_limit * 100))
-			: 0
+	const cpuRatio = $derived(stats?.cpu_share != null ? Math.min(1, stats.cpu_share / 100) : 0);
+	const count = (n: number) => (n % 1 ? n.toFixed(1) : String(n));
+	// Docker counts CPUs in threads. The share is relative to what the container may use: its limit, else the host.
+	const cpuScope = $derived(
+		!stats?.cpu_limit
+			? ''
+			: stats.cpu_limited && stats.host_threads
+				? `limit ${count(stats.cpu_limit)} of ${stats.host_threads} threads`
+				: `of ${count(stats.cpu_limit)} threads`
+	);
+	const cpuTitle = $derived(
+		[
+			stats?.cpu_percent != null ? `${stats.cpu_percent.toFixed(1)}% of one thread, as docker stats shows it` : '',
+			stats?.host_threads
+				? `Host: ${stats.host_cores ? `${stats.host_cores} cores, ` : ''}${stats.host_threads} threads`
+				: ''
+		]
+			.filter(Boolean)
+			.join('\n')
 	);
 	const memRatio = $derived(
 		stats?.memory_used != null && stats.memory_limit
@@ -138,7 +153,7 @@
 	{:else}
 		<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
 			<!-- CPU -->
-			<div class="bg-surface-2 rounded-xl px-3 py-2.5">
+			<div class="bg-surface-2 rounded-xl px-3 py-2.5" title={cpuTitle}>
 				<p class="text-ink-3 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase">
 					<Icon name="cpu" size={12} />CPU
 				</p>
@@ -146,11 +161,9 @@
 					<Skeleton class="mt-1.5 h-5 w-16" />
 				{:else}
 					<p class="font-display mt-0.5 text-lg font-semibold tabular-nums">
-						{#if stats.cpu_percent != null}
-							{stats.cpu_percent.toFixed(1)}%
-							{#if stats.cpu_limit}<span class="text-ink-3 font-sans text-xs font-normal"
-									>of {stats.cpu_limit % 1 ? stats.cpu_limit.toFixed(1) : stats.cpu_limit} CPUs</span
-								>{/if}
+						{#if stats.cpu_share != null}
+							{stats.cpu_share.toFixed(1)}%
+							{#if cpuScope}<span class="text-ink-3 font-sans text-xs font-normal">{cpuScope}</span>{/if}
 						{:else if running}
 							<span class="text-ink-3 text-sm font-normal">measuring…</span>
 						{:else}

@@ -59,8 +59,8 @@
 
 {#snippet hostMeta(size: number)}
 	{#if host?.state === 'running'}
-		{#if host.cpu_percent != null}<span class="meta" title="CPU"
-				><Icon name="cpu" size={size} />{host.cpu_percent.toFixed(0)}%</span
+		{#if host.cpu_share != null}<span class="meta" title="CPU, of what the container may use"
+				><Icon name="cpu" size={size} />{host.cpu_share.toFixed(0)}%</span
 			>{/if}
 		{#if host.memory_used != null}<span class="meta" title="Memory"
 				><Icon name="memory" size={size} />{formatBytes(host.memory_used)}</span

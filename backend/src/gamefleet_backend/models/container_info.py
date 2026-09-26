@@ -62,8 +62,12 @@ class HostStats(BaseModel):
     state: str
     status: str
     started_at: Optional[str] = None
-    cpu_percent: Optional[float] = None  # None until two samples exist
-    cpu_limit: Optional[float] = None  # number of CPUs the container may use
+    cpu_percent: Optional[float] = None  # like `docker stats`: 100 per fully busy thread
+    cpu_share: Optional[float] = None  # 0-100: cpu_percent relative to what the container may use
+    cpu_limit: Optional[float] = None  # threads the container may use (its limit, else all host threads)
+    cpu_limited: bool = False  # a cpus/quota limit below the host's threads is set
+    host_threads: Optional[int] = None
+    host_cores: Optional[int] = None  # physical cores, when known
     memory_used: Optional[int] = None  # bytes, excluding page cache
     memory_limit: Optional[int] = None  # bytes
     data_size: Optional[int] = None  # bytes under data_path

@@ -33,6 +33,29 @@ LONG_TIMEOUT = 6 * 3600  # seconds for backup scripts and archive uploads; a wor
 HELPER_PREFIX = "gamefleet-helper-"
 
 
+def _host_cpu() -> tuple[Optional[int], Optional[int]]:
+    """Physical cores and threads of this machine from /proc/cpuinfo (containers see the host's)."""
+    try:
+        text = open("/proc/cpuinfo").read()
+    except OSError:
+        return None, None
+    threads, cores, physical = 0, set(), "0"
+    for line in text.splitlines():
+        key, _, value = line.partition(":")
+        key, value = key.strip(), value.strip()
+        if key == "processor":
+            threads += 1
+        elif key == "physical id":
+            physical = value
+        elif key == "core id":
+            cores.add((physical, value))
+    return (len(cores) or None), (threads or None)
+
+
+# Docker reports threads only; the cores come from here, and only when the daemon runs on this machine.
+HOST_CORES, HOST_THREADS = _host_cpu()
+
+
 def map_container(c: dict[str, Any]) -> ContainerInfo:
     seen: set[tuple[int, str]] = set()
     ports: list[PortBinding] = []
@@ -338,10 +361,15 @@ class DockerService:
             return stats
 
     async def _sample(self, name: str, now: float) -> HostStats:
+        previous = self._samples.get(name)
+
         def fetch(c: docker.DockerClient):
             attrs = c.api.inspect_container(name)
             state = attrs["State"]
-            raw = c.api.stats(name, stream=False, one_shot=True) if state.get("Running") else None
+            # Without an earlier sample, let Docker take two (about a second apart) so the very first
+            # request already has a CPU value; afterwards one instant sample and the delta to the last one.
+            one_shot = previous is not None and previous.get("started") == state.get("StartedAt")
+            raw = c.api.stats(name, stream=False, one_shot=one_shot) if state.get("Running") else None
             return attrs, raw
         attrs, raw = await self._call(fetch)
         state = attrs["State"]
@@ -362,10 +390,13 @@ class DockerService:
         usage = (cpu.get("cpu_usage") or {}).get("total_usage")
         system = cpu.get("system_cpu_usage")
         online = cpu.get("online_cpus") or len((cpu.get("cpu_usage") or {}).get("percpu_usage") or []) or os.cpu_count() or 1
-        previous = self._samples.get(name)
-        if previous and usage is not None and system is not None and previous.get("started") == state.get("StartedAt"):
-            cpu_delta = usage - previous["usage"]
-            system_delta = system - previous["system"]
+        pre = raw.get("precpu_stats") or {}
+        if previous and previous.get("started") == state.get("StartedAt"):
+            base = (previous["usage"], previous["system"])
+        else:  # Docker's own earlier sample, present when one_shot was off
+            base = ((pre.get("cpu_usage") or {}).get("total_usage"), pre.get("system_cpu_usage"))
+        if usage is not None and system is not None and None not in base:
+            cpu_delta, system_delta = usage - base[0], system - base[1]
             if cpu_delta >= 0 and system_delta > 0:
                 result.cpu_percent = round(cpu_delta / system_delta * online * 100, 1)
         self._samples[name] = {"usage": usage, "system": system, "started": state.get("StartedAt")}
@@ -373,7 +404,13 @@ class DockerService:
         host_config = attrs.get("HostConfig") or {}
         nano = host_config.get("NanoCpus") or 0
         quota, period = host_config.get("CpuQuota") or 0, host_config.get("CpuPeriod") or 100000
-        result.cpu_limit = nano / 1e9 if nano else (quota / period if quota > 0 else float(online))
+        limit = nano / 1e9 if nano else (quota / period if quota > 0 else 0)
+        result.cpu_limited = 0 < limit < online
+        result.cpu_limit = limit if result.cpu_limited else float(online)
+        result.host_threads = online
+        result.host_cores = HOST_CORES if HOST_THREADS == online else None
+        if result.cpu_percent is not None:
+            result.cpu_share = round(min(100.0, result.cpu_percent / result.cpu_limit), 1)
 
         mem = raw.get("memory_stats") or {}
         if (used := mem.get("usage")) is not None:
