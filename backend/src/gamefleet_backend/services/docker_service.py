@@ -10,7 +10,7 @@ import os
 import re
 import tarfile
 import time
-from typing import Any, Optional
+from typing import Any, Iterable, Iterator, Optional
 
 import docker
 import docker.errors
@@ -29,6 +29,8 @@ IMAGE_ID = re.compile(r"^(sha256:)?[0-9a-f]{12,64}$")
 WILDCARD_IPS = {"", "0.0.0.0", "::"}
 STATES_MAX_AGE = 5.0  # seconds the container-state snapshot is shared between live queries
 POWER_TIMEOUT = 45  # seconds a container gets to shut down cleanly before it is killed
+LONG_TIMEOUT = 6 * 3600  # seconds for backup scripts and archive uploads; a world of many GB takes its time
+HELPER_PREFIX = "gamefleet-helper-"
 
 
 def map_container(c: dict[str, Any]) -> ContainerInfo:
@@ -95,6 +97,7 @@ class DockerService:
 
     def __init__(self):
         self._client: Optional[docker.DockerClient] = None
+        self._long: Optional[docker.DockerClient] = None  # same daemon, patient enough for backups
         self._error: Optional[str] = None
         self._checked_at = 0.0
         # Per container: last raw stats sample (for CPU deltas), last HostStats, last sizes.
@@ -132,8 +135,12 @@ class DockerService:
         except DockerUnavailable as exc:
             return False, str(exc)
 
-    async def _call(self, fn, *args, **kwargs):
+    async def _call(self, fn, *args, long: bool = False, **kwargs):
         client = await asyncio.to_thread(self._connect)
+        if long:
+            if self._long is None:
+                self._long = docker.from_env(timeout=LONG_TIMEOUT)
+            client = self._long
         try:
             return await asyncio.to_thread(fn, client, *args, **kwargs)
         except docker.errors.NotFound:
@@ -141,7 +148,7 @@ class DockerService:
         except (docker.errors.APIError, docker.errors.DockerException, OSError) as exc:
             # Connection problems mean the daemon went away; force a reconnect on the next call.
             if not isinstance(exc, docker.errors.APIError):
-                self._client = None
+                self._client = self._long = None
             raise
 
     # ---- listing --------------------------------------------------------------------------------------
@@ -234,6 +241,53 @@ class DockerService:
             return await self._call(read)
         except docker.errors.NotFound:
             return None
+
+    # ---- files and shells (backups) -------------------------------------------------------------------
+
+    async def create_helper(self, name: str) -> str:
+        """A container that shares every mount of `name` (volumes_from) and only sleeps: shell access to the
+        data of a game server while it is stopped. It runs the game's own image, so nothing is pulled and the
+        same tar and chown are there; the entrypoint is replaced, so the game never starts."""
+        def run(c: docker.DockerClient) -> str:
+            attrs = c.api.inspect_container(name)
+            helper = HELPER_PREFIX + name
+            try:
+                c.api.remove_container(helper, force=True)  # left behind by an interrupted run
+            except docker.errors.NotFound:
+                pass
+            c.api.create_container(
+                image=attrs["Image"], entrypoint=["sleep"], command=["86400"], user="root", name=helper,
+                host_config=c.api.create_host_config(volumes_from=[name], network_mode="none"),
+            )
+            c.api.start(helper)
+            return helper
+        return await self._call(run)
+
+    async def remove_container(self, name: str) -> None:
+        def run(c: docker.DockerClient) -> None:
+            try:
+                c.api.remove_container(name, force=True)
+            except docker.errors.NotFound:
+                pass
+        await self._call(run)
+
+    async def shell(self, name: str, script: str, env: dict[str, str]) -> tuple[int, str]:
+        """Run a POSIX sh script as root in a running container: exit code and combined output. Values go in
+        through the environment, never into the script text, so no quoting can go wrong."""
+        def run(c: docker.DockerClient) -> tuple[int, str]:
+            exec_id = c.api.exec_create(name, ["sh", "-c", script], environment=env, user="root")
+            output = c.api.exec_start(exec_id)
+            code = c.api.exec_inspect(exec_id).get("ExitCode")
+            return code if code is not None else -1, output.decode("utf-8", errors="replace")
+        return await self._call(run, long=True)
+
+    async def put_archive(self, name: str, path: str, data: Iterable[bytes]) -> None:
+        """Extract a tar stream into `path` of the container (works while it is stopped)."""
+        await self._call(lambda c: c.api.put_archive(name, path, data), long=True)
+
+    async def get_archive(self, name: str, path: str) -> tuple[Iterator[bytes], dict[str, Any]]:
+        """Tar stream of a path in the container plus its stat (size, mtime); works while it is stopped."""
+        return await self._call(lambda c: c.api.get_archive(name, path))
 
     # ---- power ----------------------------------------------------------------------------------------
 

@@ -20,7 +20,7 @@ from gamefleet_backend.models.container_info import ContainerInfo, DetectedGame,
 from gamefleet_backend.models.game_server_type import GAME_CATALOG, GameServerType, QueryProtocol
 from gamefleet_backend.services import modpack_service
 from gamefleet_backend.services.docker_service import (
-    DockerUnavailable, SERVER_ADDRESS, container_ip, docker_service, map_container, network_mode,
+    DockerUnavailable, HELPER_PREFIX, SERVER_ADDRESS, container_ip, docker_service, map_container, network_mode,
 )
 
 log = logging.getLogger(__name__)
@@ -152,6 +152,8 @@ class DockerDiscoveryService:
         for raw in raw_containers:
             raw = await docker_service.complete(raw)
             info = map_container(raw)
+            if info.name.startswith(HELPER_PREFIX):
+                continue  # a backup helper runs the game's image, but is not a server
             server = linked.get(info.name)
             detected = detect(raw, GameServerType(server.game) if server else None)
             if detected is None and server is None:

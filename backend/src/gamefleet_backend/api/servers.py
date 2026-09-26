@@ -1,16 +1,22 @@
 import asyncio
+import os
+import tempfile
 from typing import Literal, Sequence
 
 import docker.errors
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from gamefleet_backend.auth import current_user, is_admin
+from gamefleet_backend.auth import current_user, download_user, is_admin
 from gamefleet_backend.db.models.game_server import GameServer, GameServerPublic
 from gamefleet_backend.dependencies import get_docker_discovery_service, get_game_server_service
 from gamefleet_backend.models.container_info import HostStats
 from gamefleet_backend.models.game_server_type import GAME_CATALOG, GameServerType, QueryProtocol
 from gamefleet_backend.models.server_info import LiveServerInfo
+from gamefleet_backend.services.backup_service import (
+    BackupError, BackupInfo, BackupJob, World, backup_service, plan_upload,
+)
 from gamefleet_backend.services.docker_discovery_service import DockerDiscoveryService
 from gamefleet_backend.services.docker_service import DockerUnavailable, docker_service
 from gamefleet_backend.services.game_server_service import GameServerService
@@ -283,6 +289,10 @@ async def power_server(
     """Start, stop or restart the container behind a Docker-linked server. A start answers 409 with the
     containers that hold its host ports; repeat it with `stop_conflicting` to stop those servers first."""
     server = await _docker_server(server_id, service)
+    job = backup_service.jobs.get(server_id)
+    if job and job.finished_at is None:
+        # The job stops and starts the container itself; a start in between would load a half-restored world.
+        raise HTTPException(status_code=409, detail=f"A {job.action} is running; wait until it has finished.")
     try:
         if body.action == "start":
             await _free_ports(server, body.stop_conflicting, service)
@@ -310,3 +320,134 @@ async def get_server_live_info_by_id(
 ):
     """Get live information for a server by its database ID."""
     return await LiveServerInfoService.get_server_info(await _visible_server(server_id, admin, service))
+
+
+# ---- backups (Docker-linked servers, login required) ----------------------------------------------------
+
+class RestoreOptions(BaseModel):
+    # Take a snapshot of the current world before it is replaced.
+    keep_copy: bool = True
+
+
+async def _world(server_id: str, service: GameServerService) -> World:
+    server = await _docker_server(server_id, service)
+    try:
+        return await backup_service.world(server)
+    except BackupError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except DockerUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
+
+
+def _backup_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, BackupError):
+        return HTTPException(status_code=409, detail=str(exc))
+    if isinstance(exc, DockerUnavailable):
+        return HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
+    return HTTPException(status_code=502, detail=f"Docker refused the request: {getattr(exc, 'explanation', None) or exc}")
+
+
+@router.get('/{server_id}/backups', response_model=BackupInfo, operation_id="getBackups", dependencies=LOGIN)
+async def get_backups(server_id: str, service: GameServerService = Depends(get_game_server_service)):
+    """Where the world of a Docker-linked server lives, the snapshots kept next to it and the current job."""
+    server = await _docker_server(server_id, service)
+    try:
+        info = await backup_service.info(server)
+    except (BackupError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _backup_error(exc)
+    # The catalog only knows the default world folder; a world folder resolved from the container
+    # (level-name "World" on many modpacks) also corrects the world size in the host panel.
+    if info.kind == "dir" and info.target and info.target != server.world_path:
+        await service.update_server(server.id, {"world_path": info.target})
+    return info
+
+
+@router.get('/{server_id}/backups/job', response_model=BackupJob | None, operation_id="getBackupJob", dependencies=LOGIN)
+def get_backup_job(server_id: str):
+    """The running or last finished snapshot/restore of a server (in memory, cheap to poll)."""
+    return backup_service.jobs.get(server_id)
+
+
+@router.post('/{server_id}/backups', response_model=BackupJob, operation_id="createSnapshot", dependencies=LOGIN)
+async def create_snapshot(server_id: str, service: GameServerService = Depends(get_game_server_service)):
+    """Archive the current world into the server's backup directory. Runs in the background; poll the job."""
+    world = await _world(server_id, service)
+    try:
+        return backup_service.snapshot(world)
+    except BackupError as exc:
+        raise _backup_error(exc)
+
+
+@router.post('/{server_id}/backups/restore', response_model=BackupJob, operation_id="restoreUpload", dependencies=LOGIN,
+             openapi_extra={"requestBody": {"required": True, "content": {
+                 "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}})
+async def restore_upload(
+    server_id: str,
+    request: Request,
+    filename: str = Query(..., description="Name of the uploaded file; its extension tells the format"),
+    keep_copy: bool = Query(True, description="Snapshot the current world before it is replaced"),
+    service: GameServerService = Depends(get_game_server_service),
+):
+    """Replace the world with an uploaded archive or save file (raw request body). The server is stopped
+    while the backup is applied and started again afterwards. Runs in the background; poll the job."""
+    world = await _world(server_id, service)
+    job = backup_service.jobs.get(server_id)
+    if job and job.finished_at is None:
+        raise HTTPException(status_code=409, detail=f"A {job.action} is already running for this server.")
+    upload = tempfile.NamedTemporaryFile(prefix="gamefleet-restore-", delete=False)
+    try:
+        async for chunk in request.stream():
+            upload.write(chunk)
+        upload.close()
+        if os.path.getsize(upload.name) == 0:
+            raise HTTPException(status_code=422, detail="The upload is empty.")
+        try:
+            plan = await asyncio.to_thread(plan_upload, world, upload.name, filename)
+        except BackupError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        try:
+            return backup_service.restore_upload(world, plan, upload.name, keep_copy, os.path.basename(filename))
+        except BackupError as exc:
+            plan.cleanup()
+            raise _backup_error(exc)
+    except BaseException:
+        upload.close()
+        os.unlink(upload.name)
+        raise
+
+
+@router.post('/{server_id}/backups/{file}/restore', response_model=BackupJob, operation_id="restoreSnapshot", dependencies=LOGIN)
+async def restore_snapshot(server_id: str, file: str, body: RestoreOptions,
+                           service: GameServerService = Depends(get_game_server_service)):
+    """Roll the world back to one of its snapshots (same stop, apply, start sequence as an upload)."""
+    world = await _world(server_id, service)
+    try:
+        return backup_service.restore_snapshot(world, file, body.keep_copy)
+    except BackupError as exc:
+        raise _backup_error(exc)
+
+
+@router.get('/{server_id}/backups/{file}', operation_id="downloadSnapshot", dependencies=[Depends(download_user)],
+            response_class=StreamingResponse)
+async def download_snapshot(server_id: str, file: str, service: GameServerService = Depends(get_game_server_service)):
+    """Download a snapshot. Accepts the bearer token as `?token=` so a plain link works."""
+    world = await _world(server_id, service)
+    try:
+        stream, size = await backup_service.download(world, file)
+    except (BackupError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _backup_error(exc)
+    headers = {"Content-Disposition": f'attachment; filename="{file}"'}
+    if size:
+        headers["Content-Length"] = str(size)
+    return StreamingResponse(stream, media_type="application/gzip", headers=headers)
+
+
+@router.delete('/{server_id}/backups/{file}', operation_id="deleteSnapshot", dependencies=LOGIN)
+async def delete_snapshot(server_id: str, file: str, service: GameServerService = Depends(get_game_server_service)):
+    """Delete a snapshot from the server's backup directory."""
+    world = await _world(server_id, service)
+    try:
+        await backup_service.delete(world, file)
+    except (BackupError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _backup_error(exc)
+    return {"file": file, "deleted": True}

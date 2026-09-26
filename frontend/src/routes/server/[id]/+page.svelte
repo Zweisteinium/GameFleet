@@ -22,6 +22,7 @@
 	import ServerForm from '$lib/components/ServerForm.svelte';
 	import ServerProperties from '$lib/components/ServerProperties.svelte';
 	import HostPanel from '$lib/components/HostPanel.svelte';
+	import BackupPanel from '$lib/components/BackupPanel.svelte';
 	import { loggedIn } from '$lib/auth.svelte';
 	import { confirmDialog } from '$lib/confirm.svelte';
 	import GameArt from '$lib/components/GameArt.svelte';
@@ -294,6 +295,9 @@
 
 		{#if isLocal}
 			<HostPanel {server} stats={hostStats} onPower={power} />
+			{#if loggedIn()}
+				<BackupPanel {server} running={hostStats?.state === 'running'} onChanged={refreshLiveInfo} />
+			{/if}
 		{/if}
 
 		{#if !liveInfo}

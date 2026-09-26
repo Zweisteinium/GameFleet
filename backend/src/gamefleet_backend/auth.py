@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from gamefleet_backend.settings import DEV
@@ -162,6 +162,16 @@ async def current_user(user: Optional[User] = Depends(optional_user)) -> Optiona
     if user is None and not OPEN_ACCESS:
         raise _unauthorized()
     return user
+
+
+async def download_user(token: Optional[str] = Query(default=None), user: Optional[User] = Depends(optional_user)) -> Optional[User]:
+    """`current_user` for links the browser opens itself (file downloads), which cannot carry a header: the
+    token may come as a query parameter instead."""
+    if token is not None and AUTH_ENABLED:
+        user = verify_token(token)
+        if user is None:
+            raise _unauthorized()
+    return await current_user(user)
 
 
 def main(argv: list[str]) -> int:

@@ -16,6 +16,7 @@ FROM node:24-alpine AS node-server
 WORKDIR /app
 COPY --from=build /app/build ./build
 COPY --from=build /app/package.json ./
-ENV NODE_ENV=production PORT=3000
+# BODY_SIZE_LIMIT: backup uploads pass through the proxy; the adapter's default would cap them at 512 KiB.
+ENV NODE_ENV=production PORT=3000 BODY_SIZE_LIMIT=Infinity
 EXPOSE 3000
 CMD ["node", "build"]

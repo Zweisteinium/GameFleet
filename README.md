@@ -18,6 +18,7 @@ A small, self-hosted dashboard for your game servers. It shows which servers are
 - Live status, player counts and player names (where the game publishes them), refreshed every 30 seconds
 - Per-game details: Minecraft MOTD and server icon, ARK day/cluster/mods, Factorio evolution and tags, raw A2S rules for Steam games
 - Game servers running in Docker on the same host are found automatically, can be started, stopped and restarted from the dashboard, and show CPU, memory, data and world size
+- Backups for those servers: snapshots of the world, restore from an uploaded archive or save file, rollback, download
 - Public by default: visitors see the servers you mark as public; signing in (users from an environment variable) unlocks the rest, including adding, editing and controlling servers
 - Real game artwork, downloaded once and cached locally by the backend
 - Light and dark theme
@@ -54,7 +55,22 @@ Hosts with many instances of one game are the normal case: a compose directory p
 
 Ports are translated to what is reachable from the host (published port, or the container's own address when nothing is published), the container name is the link, so `docker compose up` recreating a container keeps it attached, and a changed address or port mapping is picked up on the next discovery run. Imported servers get a **Host container** panel with start/stop/restart, CPU and memory (one Docker stats sample per refresh, cached for 10 s), and the size of the data and world directories (`du` inside the container, cached for 5 min). Removing an imported server hides the container from discovery; it can be shown again from the panel.
 
-Backups and rollback are planned on top of this: every imported server already records its persistent paths and volumes, and stop/start are the primitives a restore needs.
+## Backups
+
+Signed in, every imported server whose image GameFleet knows gets a **Backups** panel. **Back up now** writes a snapshot (`<world>-<date>.tar.gz`) to `gamefleet-backups/` in the server's data directory, so snapshots sit next to the data on the host and survive container recreation; they can be downloaded, deleted or restored from the panel. **Restore from file** takes an archive (zip, tar, tar.gz/xz/zst) or a save file and puts the world where the game loads it from:
+
+| Game | Upload | Goes to |
+|---|---|---|
+| Minecraft Java | archive with a world folder (the one with `level.dat`, at any depth) | the folder named by `level-name` (`LEVEL`), replaced; Paper's `_nether`/`_the_end` along with it |
+| Minecraft Bedrock | `.mcworld` or an archive of the world folder | `worlds/<level-name>`, replaced |
+| Factorio | save `.zip` | `saves/`, named `SAVE_NAME` when set, otherwise loaded as the newest save |
+| Satisfactory | `.sav` or an archive of them | `saved/server/`; the server loads the newest save of its session |
+| Valheim | archive with the `.db` and `.fwl` pair | `worlds_local/`, renamed to `WORLD_NAME` |
+| ARK (ASE, ASA) | `.ark` plus optional profiles and tribes | `SavedArks/` (ASA: `SavedArks/<map>/`) |
+
+Archives from other tools work as long as the world is in them: wrapper folders, `__MACOSX` and `session.lock` are ignored, and a Java world uploaded to a Bedrock server (or the other way round) is refused before anything is touched. A running server is stopped for the restore and started again afterwards, the dialog says so first; **Keep a copy of the current world first** (on by default) takes a snapshot before anything is replaced. If applying fails after the world was touched, the server stays stopped so the data can be looked at. A snapshot of a running Minecraft server pauses world saving over RCON while it is written (`save-off`, `save-all flush`, `save-on`); other games are copied as they are, so stop them first for a guaranteed consistent snapshot.
+
+The file work runs inside the game container while it runs, and otherwise in a short-lived helper container that shares its mounts (`volumes_from`) and uses the game's own image, so nothing is pulled and stopped servers work the same. The world must be on a volume or bind mount. An upload is buffered in the backend's temporary directory, checked, and streamed into a staging folder next to the world, which is then swapped in and handed to the owner of the data directory. Minecraft Java and Factorio are tested against `itzg/minecraft-server` (Paper) and `factoriotools/factorio`; the other layouts follow the images' documentation.
 
 ## Quick start (Docker)
 
@@ -123,7 +139,7 @@ Games that speak A2S need no query code. Anything else gets a module in `backend
 
 ```
 backend/   FastAPI + SQLModel. api/ (routes), auth.py (users, tokens), services/ (live info, docker,
-           discovery, assets), lib/query/ (one module per protocol), models/ (API models, game and
+           discovery, backups, assets), lib/query/ (one module per protocol), models/ (API models, game and
            container catalogs), db/
 frontend/  SvelteKit (adapter-node, client-only, proxies /api) + Tailwind v4. lib/components/, routes/main, routes/server/[id]
 docs/      screenshots
