@@ -102,6 +102,25 @@ export interface ArkServerInfo {
   platform_type?: string | null;
 }
 
+/** Backup */
+export interface Backup {
+  /** Path */
+  path: string;
+  /** File */
+  file: string;
+  /** Folder */
+  folder: string;
+  /** Size */
+  size: number;
+  /** Created */
+  created: number;
+  /**
+   * Gamefleet
+   * @default false
+   */
+  gamefleet?: boolean;
+}
+
 /** BackupInfo */
 export interface BackupInfo {
   /** Supported */
@@ -124,24 +143,39 @@ export interface BackupInfo {
    */
   running?: boolean;
   /**
-   * Snapshots
+   * Locations
    * @default []
    */
-  snapshots?: Snapshot[];
+  locations?: string[];
+  /**
+   * Backups
+   * @default []
+   */
+  backups?: Backup[];
   job?: BackupJob | null;
 }
 
 /**
  * BackupJob
- * A snapshot or restore in progress or just finished (one per server, kept in memory).
+ * A restore in progress or just finished (one per server, kept in memory).
  */
 export interface BackupJob {
-  /** Action */
-  action: "snapshot" | "restore";
+  /**
+   * Action
+   * @default "restore"
+   */
+  action?: "restore";
   /** Source */
   source: string;
   /** Phase */
-  phase: "stopping" | "snapshot" | "applying" | "starting" | "done" | "failed";
+  phase:
+    | "preparing"
+    | "stopping"
+    | "snapshot"
+    | "applying"
+    | "starting"
+    | "done"
+    | "failed";
   /** Started At */
   started_at: number;
   /** Finished At */
@@ -640,8 +674,10 @@ export interface PowerRequest {
   stop_conflicting?: boolean;
 }
 
-/** RestoreOptions */
-export interface RestoreOptions {
+/** RestoreRequest */
+export interface RestoreRequest {
+  /** Path */
+  path: string;
   /**
    * Keep Copy
    * @default true
@@ -712,16 +748,6 @@ export interface SessionInfo {
   admin: boolean;
   /** Dev */
   dev: boolean;
-}
-
-/** Snapshot */
-export interface Snapshot {
-  /** File */
-  file: string;
-  /** Size */
-  size: number;
-  /** Created */
-  created: number;
 }
 
 /**
@@ -1054,7 +1080,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
 /**
  * @title Game Server Dashboard API
- * @version 1.1.0
+ * @version 1.2.0
  *
  * API for managing and monitoring game servers
  */
@@ -1411,7 +1437,7 @@ export class Api<
       }),
 
     /**
-     * @description Where the world of a Docker-linked server lives, the snapshots kept next to it and the current job.
+     * @description The backups the server (or its mods) wrote, where the world they restore into lives, and the current job.
      *
      * @tags servers
      * @name GetBackups
@@ -1429,25 +1455,7 @@ export class Api<
       }),
 
     /**
-     * @description Archive the current world into the server's backup directory. Runs in the background; poll the job.
-     *
-     * @tags servers
-     * @name CreateSnapshot
-     * @summary Create Snapshot
-     * @request POST:/api/servers/{server_id}/backups
-     * @secure
-     */
-    createSnapshot: (serverId: string, params: RequestParams = {}) =>
-      this.request<BackupJob, HTTPValidationError>({
-        path: `/api/servers/${serverId}/backups`,
-        method: "POST",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * @description The running or last finished snapshot/restore of a server (in memory, cheap to poll).
+     * @description The running or last finished restore of a server (in memory, cheap to poll).
      *
      * @tags servers
      * @name GetBackupJob
@@ -1465,12 +1473,36 @@ export class Api<
       }),
 
     /**
-     * @description Replace the world with an uploaded archive or save file (raw request body). The server is stopped while the backup is applied and started again afterwards. Runs in the background; poll the job.
+     * @description Restore one of the listed backups. The server is stopped while it is applied and started again afterwards. Runs in the background; poll the job.
+     *
+     * @tags servers
+     * @name RestoreBackup
+     * @summary Restore Backup
+     * @request POST:/api/servers/{server_id}/backups/restore
+     * @secure
+     */
+    restoreBackup: (
+      serverId: string,
+      data: RestoreRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<BackupJob, HTTPValidationError>({
+        path: `/api/servers/${serverId}/backups/restore`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description Replace the world with an uploaded archive or save file (raw request body), same sequence as a restore. Runs in the background; poll the job.
      *
      * @tags servers
      * @name RestoreUpload
      * @summary Restore Upload
-     * @request POST:/api/servers/{server_id}/backups/restore
+     * @request POST:/api/servers/{server_id}/backups/upload
      * @secure
      */
     restoreUpload: (
@@ -1483,7 +1515,7 @@ export class Api<
         filename: string;
         /**
          * Keep Copy
-         * Snapshot the current world before it is replaced
+         * Keep a copy of the current world before it is replaced
          * @default true
          */
         keep_copy?: boolean;
@@ -1492,7 +1524,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<BackupJob, HTTPValidationError>({
-        path: `/api/servers/${serverId}/backups/restore`,
+        path: `/api/servers/${serverId}/backups/upload`,
         method: "POST",
         query: query,
         body: data,
@@ -1502,75 +1534,29 @@ export class Api<
       }),
 
     /**
-     * @description Roll the world back to one of its snapshots (same stop, apply, start sequence as an upload).
+     * @description Download one of the listed backups. Accepts the bearer token as `?token=` so a plain link works.
      *
      * @tags servers
-     * @name RestoreSnapshot
-     * @summary Restore Snapshot
-     * @request POST:/api/servers/{server_id}/backups/{file}/restore
+     * @name DownloadBackup
+     * @summary Download Backup
+     * @request GET:/api/servers/{server_id}/backups/download
      * @secure
      */
-    restoreSnapshot: (
+    downloadBackup: (
       serverId: string,
-      file: string,
-      data: RestoreOptions,
-      params: RequestParams = {},
-    ) =>
-      this.request<BackupJob, HTTPValidationError>({
-        path: `/api/servers/${serverId}/backups/${file}/restore`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * @description Download a snapshot. Accepts the bearer token as `?token=` so a plain link works.
-     *
-     * @tags servers
-     * @name DownloadSnapshot
-     * @summary Download Snapshot
-     * @request GET:/api/servers/{server_id}/backups/{file}
-     * @secure
-     */
-    downloadSnapshot: (
-      serverId: string,
-      file: string,
-      query?: {
+      query: {
+        /** Path */
+        path: string;
         /** Token */
         token?: string | null;
       },
       params: RequestParams = {},
     ) =>
       this.request<void, HTTPValidationError>({
-        path: `/api/servers/${serverId}/backups/${file}`,
+        path: `/api/servers/${serverId}/backups/download`,
         method: "GET",
         query: query,
         secure: true,
-        ...params,
-      }),
-
-    /**
-     * @description Delete a snapshot from the server's backup directory.
-     *
-     * @tags servers
-     * @name DeleteSnapshot
-     * @summary Delete Snapshot
-     * @request DELETE:/api/servers/{server_id}/backups/{file}
-     * @secure
-     */
-    deleteSnapshot: (
-      serverId: string,
-      file: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<any, HTTPValidationError>({
-        path: `/api/servers/${serverId}/backups/${file}`,
-        method: "DELETE",
-        secure: true,
-        format: "json",
         ...params,
       }),
   };
