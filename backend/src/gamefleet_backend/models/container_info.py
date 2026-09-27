@@ -68,6 +68,10 @@ class HostStats(BaseModel):
     cpu_limited: bool = False  # a cpus/quota limit below the host's threads is set
     host_threads: Optional[int] = None
     host_cores: Optional[int] = None  # physical cores, when known
+    # The whole machine, when Docker runs on the same one as GameFleet.
+    host_cpu_percent: Optional[float] = None  # 0-100 over all threads
+    host_memory_used: Optional[int] = None  # bytes, without reclaimable cache
+    host_memory_total: Optional[int] = None
     memory_used: Optional[int] = None  # bytes, excluding page cache
     memory_limit: Optional[int] = None  # bytes
     data_size: Optional[int] = None  # bytes under data_path

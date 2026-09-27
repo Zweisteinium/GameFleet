@@ -48,7 +48,8 @@
 		[
 			stats?.cpu_percent != null ? `${stats.cpu_percent.toFixed(1)}% of one thread, as docker stats shows it` : '',
 			stats?.host_threads
-				? `Host: ${stats.host_cores ? `${stats.host_cores} cores, ` : ''}${stats.host_threads} threads`
+				? `Host: ${stats.host_cores ? `${stats.host_cores} cores, ` : ''}${stats.host_threads} threads` +
+					(stats.host_cpu_percent != null ? `, ${stats.host_cpu_percent.toFixed(0)}% busy in total` : '')
 				: ''
 		]
 			.filter(Boolean)
@@ -59,6 +60,42 @@
 			? Math.min(1, stats.memory_used / stats.memory_limit)
 			: 0
 	);
+	const memTitle = $derived(
+		stats?.host_memory_total && stats.host_memory_used != null
+			? `Host: ${formatBytes(stats.host_memory_used)} of ${formatBytes(stats.host_memory_total)} in use in total`
+			: ''
+	);
+
+	/** Bar parts as fractions: this server, everything running on the host, and the container's limit. */
+	interface Usage {
+		own: number;
+		total: number | null;
+		limit: number | null;
+	}
+	const fraction = (value: number) => Math.min(1, Math.max(0, value));
+	// With whole-host figures the bar is the whole machine; without them it is the container's allowance.
+	const cpuBar = $derived.by((): Usage => {
+		const threads = stats?.host_threads;
+		if (stats?.cpu_percent == null || stats.host_cpu_percent == null || !threads)
+			return { own: cpuRatio, total: null, limit: null };
+		const own = fraction(stats.cpu_percent / (threads * 100));
+		return {
+			own,
+			total: Math.max(own, fraction(stats.host_cpu_percent / 100)),
+			limit: stats.cpu_limited && stats.cpu_limit ? fraction(stats.cpu_limit / threads) : null
+		};
+	});
+	const memBar = $derived.by((): Usage => {
+		const total = stats?.host_memory_total;
+		if (stats?.memory_used == null || stats.host_memory_used == null || !total)
+			return { own: memRatio, total: null, limit: null };
+		const own = fraction(stats.memory_used / total);
+		return {
+			own,
+			total: Math.max(own, fraction(stats.host_memory_used / total)),
+			limit: stats.memory_limit && stats.memory_limit < total * 0.98 ? fraction(stats.memory_limit / total) : null
+		};
+	});
 	const usageTone = (ratio: number) =>
 		ratio >= 0.9 ? 'danger' : ratio >= 0.7 ? 'warning' : 'success';
 
@@ -88,6 +125,25 @@
 		}
 	}
 </script>
+
+{#snippet usageBar(usage: Usage, tone: keyof typeof bars)}
+	<!-- Solid: this server. Faded: everything running on the host. Tick: the container's limit. -->
+	<div class="bg-surface-3 relative mt-1.5 h-1.5 overflow-hidden rounded-full">
+		{#if usage.total != null}
+			<div
+				class="absolute inset-y-0 left-0 rounded-full opacity-25 transition-all duration-500 {bars[tone]}"
+				style="width: {usage.total * 100}%"
+			></div>
+		{/if}
+		<div
+			class="absolute inset-y-0 left-0 rounded-full transition-all duration-500 {bars[tone]}"
+			style="width: {usage.own > 0 ? Math.max(usage.own * 100, 1) : 0}%"
+		></div>
+		{#if usage.limit != null}
+			<div class="bg-ink-2 absolute inset-y-0 w-0.5" style="left: calc({usage.limit * 100}% - 1px)"></div>
+		{/if}
+	</div>
+{/snippet}
 
 <section class="card p-5">
 	<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -170,16 +226,11 @@
 							—
 						{/if}
 					</p>
-					<div class="bg-surface-3 mt-1.5 h-1.5 overflow-hidden rounded-full">
-						<div
-							class="h-full rounded-full transition-all duration-500 {bars[usageTone(cpuRatio)]}"
-							style="width: {cpuRatio * 100}%"
-						></div>
-					</div>
+					{@render usageBar(cpuBar, usageTone(cpuRatio))}
 				{/if}
 			</div>
 			<!-- Memory -->
-			<div class="bg-surface-2 rounded-xl px-3 py-2.5">
+			<div class="bg-surface-2 rounded-xl px-3 py-2.5" title={memTitle}>
 				<p class="text-ink-3 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase">
 					<Icon name="memory" size={12} />Memory
 				</p>
@@ -196,12 +247,7 @@
 							—
 						{/if}
 					</p>
-					<div class="bg-surface-3 mt-1.5 h-1.5 overflow-hidden rounded-full">
-						<div
-							class="h-full rounded-full transition-all duration-500 {bars[usageTone(memRatio)]}"
-							style="width: {Math.max(memRatio * 100, stats.memory_used ? 1 : 0)}%"
-						></div>
-					</div>
+					{@render usageBar(memBar, usageTone(memRatio))}
 				{/if}
 			</div>
 			<!-- Storage -->

@@ -56,6 +56,36 @@ def _host_cpu() -> tuple[Optional[int], Optional[int]]:
 HOST_CORES, HOST_THREADS = _host_cpu()
 
 
+def _proc_stat() -> Optional[tuple[int, int]]:
+    """Busy and total CPU time of the whole machine (jiffies, all threads) from /proc/stat."""
+    try:
+        with open("/proc/stat") as f:
+            parts = f.readline().split()
+    except OSError:
+        return None
+    if not parts or parts[0] != "cpu" or len(parts) < 5:
+        return None
+    values = [int(v) for v in parts[1:9]]  # user nice system idle iowait irq softirq steal
+    idle = values[3] + values[4]
+    return sum(values) - idle, sum(values)
+
+
+def _meminfo() -> tuple[Optional[int], Optional[int]]:
+    """Total and used memory of the whole machine in bytes; used leaves out what the kernel can reclaim."""
+    fields: dict[str, int] = {}
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, _, value = line.partition(":")
+                if key in ("MemTotal", "MemAvailable"):
+                    fields[key] = int(value.split()[0]) * 1024
+    except (OSError, ValueError):
+        return None, None
+    if "MemTotal" not in fields or "MemAvailable" not in fields:
+        return None, None
+    return fields["MemTotal"], fields["MemTotal"] - fields["MemAvailable"]
+
+
 def map_container(c: dict[str, Any]) -> ContainerInfo:
     seen: set[tuple[int, str]] = set()
     ports: list[PortBinding] = []
@@ -131,6 +161,9 @@ class DockerService:
         # name -> state of every container, from one list call (live queries ask per server, in parallel).
         self._states: Optional[tuple[float, dict[str, str]]] = None
         self._states_lock = asyncio.Lock()
+        # Whole-machine CPU: last /proc/stat reading (time, busy, total) and the percentage derived from it.
+        self._host_cpu: Optional[tuple[float, int, int, Optional[float]]] = None
+        self._host_cpu_lock = asyncio.Lock()
         # Container id -> what `complete` learned from inspect. Image and bindings never change for an id.
         self._completed: dict[str, dict[str, Any]] = {}
 
@@ -371,7 +404,14 @@ class DockerService:
             one_shot = previous is not None and previous.get("started") == state.get("StartedAt")
             raw = c.api.stats(name, stream=False, one_shot=one_shot) if state.get("Running") else None
             return attrs, raw
-        attrs, raw = await self._call(fetch)
+        # Read the whole machine at the same time, so its half-second wait overlaps Docker's.
+        host_cpu = asyncio.create_task(self.host_cpu_percent()) if HOST_THREADS else None
+        try:
+            attrs, raw = await self._call(fetch)
+        except BaseException:
+            if host_cpu:
+                host_cpu.cancel()
+            raise
         state = attrs["State"]
         result = HostStats(
             container_name=name,
@@ -384,6 +424,8 @@ class DockerService:
         )
         if raw is None:
             self._samples.pop(name, None)
+            if host_cpu:
+                host_cpu.cancel()
             return result
 
         cpu = raw.get("cpu_stats") or {}
@@ -419,7 +461,34 @@ class DockerService:
             cache = inner.get("inactive_file", inner.get("total_inactive_file", 0)) or 0
             result.memory_used = max(0, used - cache)
             result.memory_limit = mem.get("limit")
+        # The whole machine, for the "everything else" part of the bars: only when Docker runs here.
+        if host_cpu and HOST_THREADS == online:
+            result.host_cpu_percent = await host_cpu
+            result.host_memory_total, result.host_memory_used = _meminfo()
+        elif host_cpu:
+            host_cpu.cancel()
         return result
+
+    async def host_cpu_percent(self) -> Optional[float]:
+        """How busy the whole machine is (0-100 over all threads), shared by every container's stats and cached
+        like them. Without a recent reading two are taken half a second apart."""
+        async with self._host_cpu_lock:
+            now = time.monotonic()
+            if self._host_cpu and now - self._host_cpu[0] < STATS_MIN_INTERVAL:
+                return self._host_cpu[3]
+            current = _proc_stat()
+            if current is None:
+                return None
+            if self._host_cpu is None or now - self._host_cpu[0] > 120:
+                base = current
+                await asyncio.sleep(0.5)
+                now, current = time.monotonic(), _proc_stat() or current
+            else:
+                base = self._host_cpu[1:3]
+            busy, total = current[0] - base[0], current[1] - base[1]
+            percent = round(min(100.0, busy / total * 100), 1) if total > 0 and busy >= 0 else None
+            self._host_cpu = (now, current[0], current[1], percent)
+            return percent
 
     async def _du(self, name: str, data_path: Optional[str], world_path: Optional[str]) -> tuple[Optional[int], Optional[int]]:
         def run(c: docker.DockerClient) -> list[Optional[int]]:

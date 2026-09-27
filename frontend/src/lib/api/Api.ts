@@ -545,6 +545,12 @@ export interface HostStats {
   host_threads?: number | null;
   /** Host Cores */
   host_cores?: number | null;
+  /** Host Cpu Percent */
+  host_cpu_percent?: number | null;
+  /** Host Memory Used */
+  host_memory_used?: number | null;
+  /** Host Memory Total */
+  host_memory_total?: number | null;
   /** Memory Used */
   memory_used?: number | null;
   /** Memory Limit */
@@ -1091,7 +1097,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
 /**
  * @title Game Server Dashboard API
- * @version 1.3.0
+ * @version 1.4.0
  *
  * API for managing and monitoring game servers
  */
