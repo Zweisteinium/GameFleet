@@ -6,7 +6,7 @@
 	import { api } from '$lib/api/ApiService';
 	import type { GameServerPublic, PowerConflictDetail } from '$lib/api/Api';
 	import { gameArtUrl, gameLabel, isMinecraft } from '$lib/games';
-	import { capabilities, overviewTiles, playersEmptyMessage } from '$lib/gameinfo';
+	import { capabilities, overviewTiles, playerInitial, playersEmptyMessage } from '$lib/gameinfo';
 	import {
 		live,
 		restoreLive,
@@ -415,7 +415,7 @@
 									<span
 										class="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent"
 									>
-										{player.charAt(0).toUpperCase()}
+										{playerInitial(player)}
 									</span>
 									<span class="truncate text-sm">{player}</span>
 								</li>

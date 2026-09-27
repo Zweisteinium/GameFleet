@@ -247,6 +247,13 @@ export function overviewTiles(info: LiveServerInfo, game: GameServerType): Tile[
 
 // ---- Host stats formatting ----------------------------------------------------------------------
 
+/** Letter for a player's avatar: the first letter or digit, skipping decoration like "_" or "[" and
+ *  Minecraft color codes ("§a"). Works for any script; "?" when the name has neither. */
+export function playerInitial(name: string): string {
+	const letter = name.replace(/§./g, '').match(/[\p{L}\p{N}]/u)?.[0];
+	return letter ? letter.toLocaleUpperCase() : '?';
+}
+
 export function formatBytes(bytes: number | null | undefined): string | null {
 	if (bytes == null) return null;
 	const units = ['B', 'KB', 'MB', 'GB', 'TB'];
