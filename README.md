@@ -73,6 +73,7 @@ Then open http://localhost:3000. Visitors see the servers you mark as public, an
 - Game servers in Docker on the same host are recognised automatically: start, stop, restart, CPU, memory and disk usage
 - Modpack detection for Minecraft (Modrinth, CurseForge, FTB, GTNH)
 - Restore from the backups your servers already make, or from an uploaded file
+- Create new servers in a few clicks: Minecraft with Modrinth and CurseForge modpacks, written as plain compose projects you can still edit by hand
 
 ## Supported games
 
@@ -112,6 +113,14 @@ GameFleet restores from the backups your servers already write and lists them on
 
 Other folders with "backup" in their name next to the server's data are searched too. A running server is stopped for the restore and started again afterwards. You can keep a copy of the current world first, so a restore can always be undone. You can also upload a backup from your computer. It is checked before anything is touched, but make sure it matches the server's game version and modpack.
 
+## Creating servers
+
+**Create server** on the dashboard walks through three steps: the game, the essentials (name, version or modpack, memory, the EULA where there is one, more behind "Advanced") and a review with the compose file it will write. GameFleet then creates `<servers folder>/<game>/<name>/` with `docker-compose.yml`, `.env` (generated secrets such as the RCON password) and `data/`, pulls the image, creates the container and starts it, showing the log until the server reports itself healthy.
+
+The result is an ordinary compose project: `docker compose up -d` in that folder works as before, and you can edit the file by hand. Servers of one game share the game's default port unless you pick another, so only one of them runs at a time; GameFleet offers to stop the other one.
+
+The servers folder is set on the **Settings** page, together with the owner of new folders, the public address and the defaults for memory, CPU, restart policy, stop grace period and time zone. The backend needs that folder mounted **at the same path** (`docker compose` hands the paths it sees to the Docker daemon), which `docker-compose.yml` does with `GAMEFLEET_SERVERS_DIR`. Games are described by small YAML templates in `backend/src/gamefleet_backend/templates/`.
+
 ## Configuration
 
 Set these in `.env` when running from source, or in the compose file:
@@ -123,12 +132,13 @@ Set these in `.env` when running from source, or in the compose file:
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | this host, `5432`, `gamefleet`, `gamefleet`, – | PostgreSQL connection |
 | `DATABASE_URL` | – | Full connection URL that replaces the `DB_*` values, e.g. `postgresql+asyncpg://gamefleet:secret@db.example.com:5432/gamefleet` |
 | `FRONTEND_PORT`, `BACKEND_PORT` | `3000`, `8000` | Published ports when running from source. Browsers only need the frontend |
+| `GAMEFLEET_SERVERS_DIR` | `/srv/gameservers` | Host folder new servers are created in, mounted into the backend at the same path. The Settings page can point to another folder below the mount |
 | `DOCKER_SERVER_ADDRESS` | `host.docker.internal` | Address GameFleet uses to reach game servers in Docker |
 | `GAMEFLEET_DEV` | `false` | Development mode with API docs at `/swagger` and verbose logs. Not meant for production |
 
 ## Development
 
-You need [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io/) and Docker. Run `make install` and `make db`, then `make backend` and `make frontend` in two terminals (API on port 8000, dashboard on 3000, both reload on changes). `make check` type-checks and lints, and `make swagger` regenerates the API client after model changes.
+You need [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io/) and Docker. Run `make install` and `make db`, then `make backend` and `make frontend` in two terminals (API on port 8000, dashboard on 3000, both reload on changes). `make check` type-checks and lints, `make test` runs the backend tests, and `make swagger` regenerates the API client after model changes.
 
 ## License
 

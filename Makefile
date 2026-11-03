@@ -11,7 +11,7 @@ COMPOSE = DOCKER_REPO=$(DOCKER_REPO) VERSION=$(VERSION) docker compose
 COMPOSE_ALL = $(COMPOSE) --profile db
 
 .DEFAULT_GOAL := help
-.PHONY: help install backend frontend db check swagger hash up down restart logs ps shell build release clean
+.PHONY: help install backend frontend db check test swagger hash up down restart logs ps shell build release clean
 
 ##@ Native development
 
@@ -31,6 +31,9 @@ db: ## Start the development PostgreSQL container (docker-compose.yml, profile d
 check: ## Type-check and lint the frontend, import-check the backend
 	cd frontend && pnpm check && pnpm exec eslint .
 	cd backend && uv run python -c "import gamefleet_backend.main"
+
+test: ## Run the backend tests (templates, compose generation, settings checks)
+	cd backend && uv run pytest -q
 
 swagger: ## Regenerate frontend/src/lib/api from the running dev backend's OpenAPI schema (make backend)
 	cd frontend && pnpm swagger

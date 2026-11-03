@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { api } from '$lib/api/ApiService';
 	import { ServerStatus, type DiscoveredContainer, type GameServerPublic } from '$lib/api/Api';
 	import { gameLabel } from '$lib/games';
@@ -232,10 +233,18 @@
 						>
 					</button>
 				{/if}
-				<button class="btn-primary" onclick={() => (showForm = true)}>
+				<button
+					class="btn-outline"
+					onclick={() => (showForm = true)}
+					title="Add a server that already runs somewhere"
+				>
 					<Icon name="plus" size={16} />
-					Add server
+					<span class="hidden sm:inline">Add existing</span>
 				</button>
+				<a class="btn-primary" href={resolve('/create')}>
+					<Icon name="rocket" size={16} />
+					Create server
+				</a>
 			{/if}
 		</div>
 	</div>

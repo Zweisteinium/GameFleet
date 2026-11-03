@@ -21,6 +21,10 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
+# docker CLI and compose plugin (static binaries): servers GameFleet creates are compose projects.
+COPY --from=docker:28.5.2-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker:28.5.2-cli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY src/ ./src/

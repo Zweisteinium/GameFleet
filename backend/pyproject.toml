@@ -14,7 +14,11 @@ dependencies = [
     "python-a2s>=1.4.1",
     "satisfactory-api-client>=0.1.0",
     "aiohttp>=3.14.3",
+    "pyyaml>=6.0.2",
 ]
+
+[dependency-groups]
+dev = ["pytest>=8.4.0"]
 
 [tool.uv]
 # satisfactory-api-client 0.2.1 declares python-dotenv~=1.0.1 but never imports it; allow the current release.
@@ -27,3 +31,10 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["gamefleet_backend"]
+
+[tool.setuptools.package-data]
+# Server templates for creating new game servers (services/template_service.py).
+gamefleet_backend = ["templates/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

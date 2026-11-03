@@ -47,6 +47,10 @@ LEGACY_SCHEMA_UPGRADES = [
     "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS modpack_url VARCHAR(500)",
     "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS modpack_icon VARCHAR(500)",
     "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS modpack_source VARCHAR(20)",
+    # 1.5: servers created from a template.
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS template VARCHAR(50)",
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS compose_file VARCHAR(400)",
+    "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS compose_hash VARCHAR(64)",
 ]
 
 

@@ -345,6 +345,32 @@ class DockerService:
         """Tar stream of a path in the container plus its stat (size, mtime); works while it is stopped."""
         return await self._call(lambda c: c.api.get_archive(name, path))
 
+    # ---- creating servers -----------------------------------------------------------------------------
+
+    async def pull(self, image: str, progress) -> None:
+        """Pull repository:tag, calling progress(fraction) as layers download (from a worker thread)."""
+        repository, _, tag = image.rpartition(":")
+        def run(c: docker.DockerClient) -> None:
+            layers: dict[str, tuple[int, int]] = {}
+            best = 0.0  # layers announce their size one after another; never let the bar run backwards
+            for event in c.api.pull(repository, tag=tag, stream=True, decode=True):
+                if event.get("error"):
+                    raise docker.errors.APIError(event["error"])
+                detail = event.get("progressDetail") or {}
+                if event.get("id") and detail.get("total"):
+                    layers[event["id"]] = (detail.get("current", 0), detail["total"])
+                elif event.get("id") in layers and event.get("status") in ("Download complete", "Pull complete"):
+                    layers[event["id"]] = (layers[event["id"]][1], layers[event["id"]][1])
+                total = sum(t for _, t in layers.values())
+                if total:
+                    best = max(best, sum(c for c, _ in layers.values()) / total)
+                    progress(best)
+        await self._call(run, long=True)
+
+    async def logs(self, name: str, tail: int = 40) -> list[str]:
+        data = await self._call(lambda c: c.api.logs(name, tail=tail))
+        return data.decode("utf-8", errors="replace").splitlines()
+
     # ---- power ----------------------------------------------------------------------------------------
 
     async def power(self, name: str, action: str) -> dict[str, Any]:

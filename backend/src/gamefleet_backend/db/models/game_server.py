@@ -38,6 +38,11 @@ class GameServerBase(SQLModel):
 class GameServer(GameServerBase, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     rcon_password: Optional[str] = Field(default=None, max_length=200)
+    # Servers created by GameFleet: the template, the compose file on the host and the hash of what GameFleet
+    # wrote there, which tells hand edits apart.
+    template: Optional[str] = Field(default=None, max_length=50)
+    compose_file: Optional[str] = Field(default=None, max_length=400)
+    compose_hash: Optional[str] = Field(default=None, max_length=64)
 
 
 class IgnoredContainer(SQLModel, table=True):

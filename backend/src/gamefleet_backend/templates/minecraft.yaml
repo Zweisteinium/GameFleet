@@ -1,0 +1,129 @@
+# Minecraft Java Edition on itzg/minecraft-server (https://docker-minecraft-server.readthedocs.io).
+id: minecraft
+game: minecraft
+label: Minecraft Java
+description: Vanilla, Paper, Fabric, Forge or NeoForge, or a modpack from Modrinth or CurseForge.
+image: itzg/minecraft-server
+tags:
+  - tag: java25
+    label: Java 25
+    hint: Minecraft 26.1 and newer; also runs 1.20.5 to 1.21.x and GT New Horizons
+  - tag: java21
+    label: Java 21
+    hint: Minecraft 1.20.5 to 1.21.x
+  - tag: java17
+    label: Java 17
+    hint: Minecraft 1.18 to 1.20.4, most modpacks of that time
+  - tag: java8
+    label: Java 8
+    hint: Minecraft 1.16.5 and older
+folder: minecraft
+data_path: /data
+eula:
+  env: EULA
+  label: I accept the Minecraft EULA
+  url: https://aka.ms/MinecraftEULA
+ports:
+  - name: game
+    port: 25565
+  - name: rcon
+    port: 25575
+    publish: false
+settings_env:
+  UID: owner_uid
+  GID: owner_gid
+  TZ: timezone
+tty: true
+stdin_open: true
+ready_hint: The first start downloads the server and its mods. Modpacks can take several minutes.
+variables:
+  - env: TYPE
+    label: Server type
+    type: select
+    default: VANILLA
+    options:
+      - {value: VANILLA, label: Vanilla}
+      - {value: PAPER, label: Paper, hint: Faster, with plugin support}
+      - {value: FABRIC, label: Fabric}
+      - {value: FORGE, label: Forge}
+      - {value: NEOFORGE, label: NeoForge}
+      - {value: MODRINTH, label: Modrinth modpack}
+      - {value: AUTO_CURSEFORGE, label: CurseForge modpack}
+      - {value: GTNH, label: GT New Horizons}
+  - env: VERSION
+    label: Minecraft version
+    default: LATEST
+    suggest: minecraft-versions
+    pattern: '^(LATEST|SNAPSHOT|[0-9][0-9A-Za-z.+-]*)$'
+    show_if: {TYPE: [VANILLA, PAPER, FABRIC, FORGE, NEOFORGE]}
+  - env: MODRINTH_MODPACK
+    label: Modpack
+    type: modrinth-modpack
+    required: true
+    help: Search Modrinth, or paste a project slug, ID or URL.
+    show_if: {TYPE: [MODRINTH]}
+  - env: MODRINTH_VERSION
+    label: Pack version
+    placeholder: newest release
+    advanced: true
+    show_if: {TYPE: [MODRINTH]}
+  - env: CF_PAGE_URL
+    label: CurseForge pack URL
+    required: true
+    placeholder: https://www.curseforge.com/minecraft/modpacks/all-the-mods-10
+    pattern: '^https://www\.curseforge\.com/minecraft/modpacks/[^/\s]+(/files/[0-9]+)?/?$'
+    help: The images from Java 17 on bring a CurseForge API key; Java 8 packs need one of your own.
+    show_if: {TYPE: [AUTO_CURSEFORGE]}
+  - env: GTNH_PACK_VERSION
+    label: Pack version
+    default: latest
+    show_if: {TYPE: [GTNH]}
+  - env: MEMORY
+    label: Memory
+    type: memory
+    help: Java heap. The container may use a quarter more.
+  - env: MOTD
+    label: Message of the day
+    advanced: true
+  - env: DIFFICULTY
+    label: Difficulty
+    type: select
+    default: easy
+    advanced: true
+    options:
+      - {value: peaceful, label: Peaceful}
+      - {value: easy, label: Easy}
+      - {value: normal, label: Normal}
+      - {value: hard, label: Hard}
+  - env: MAX_PLAYERS
+    label: Max players
+    type: number
+    default: "20"
+    advanced: true
+  - env: VIEW_DISTANCE
+    label: View distance
+    type: number
+    default: "10"
+    advanced: true
+  - env: ONLINE_MODE
+    label: Check accounts with Mojang
+    type: boolean
+    default: "true"
+    advanced: true
+  - env: ENABLE_WHITELIST
+    label: Whitelist
+    type: boolean
+    default: "false"
+    advanced: true
+  - env: WHITELIST
+    label: Whitelisted players
+    placeholder: Steve, Alex
+    advanced: true
+    show_if: {ENABLE_WHITELIST: ["true"]}
+  - env: OPS
+    label: Operators
+    placeholder: Steve
+    advanced: true
+  - env: RCON_PASSWORD
+    label: RCON password
+    type: secret

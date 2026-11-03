@@ -46,6 +46,16 @@
 				>
 					Servers
 				</a>
+				{#if loggedIn()}
+					<a
+						href={resolve('/settings')}
+						class="btn-ghost h-9 px-3 text-sm"
+						aria-current={page.url.pathname.startsWith('/settings') ? 'page' : undefined}
+					>
+						<Icon name="settings" size={15} class="text-ink-3" />
+						<span class="hidden sm:inline">Settings</span>
+					</a>
+				{/if}
 				{#if session.dev && loggedIn()}
 					<a
 						href="/swagger"

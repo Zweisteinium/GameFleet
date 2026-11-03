@@ -149,6 +149,12 @@ class ModrinthLookup:
             return next((hit for hit in (found or {}).get("hits", []) if _normal(hit.get("title", "")) == _normal(name)), None)
         return await self._cached(f"search:{_normal(name)}", search)
 
+    async def search_modpacks(self, query: str) -> list[dict]:
+        """Modpacks for the create wizard, most downloaded first."""
+        params = {"query": query, "limit": "12", "index": "downloads", "facets": '[["project_type:modpack"]]'}
+        found = await self._cached(f"packs:{query.strip().lower()}", lambda: self._get("/search", params))
+        return (found or {}).get("hits", [])
+
 
 modrinth = ModrinthLookup()
 

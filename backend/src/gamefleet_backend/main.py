@@ -5,7 +5,7 @@ from importlib.metadata import version as package_version
 
 from fastapi import Depends, FastAPI
 
-from .api import auth as auth_api, docker, games, servers
+from .api import auth as auth_api, create, docker, games, servers, settings as settings_api
 from .auth import current_user, log_startup_state
 from .db.session import init_db
 from .services.docker_discovery_service import DISCOVERY_INTERVAL, discovery_loop
@@ -44,6 +44,8 @@ app.include_router(auth_api.router, prefix="/api/auth", tags=["auth"])
 # Reading servers is open to visitors (limited to public servers); the router protects everything else itself.
 app.include_router(servers.router, prefix="/api/servers", tags=["servers"])
 app.include_router(docker.router, prefix="/api/docker", tags=["docker"], dependencies=protected)
+app.include_router(create.router, prefix="/api/create", tags=["create"], dependencies=protected)
+app.include_router(settings_api.router, prefix="/api/settings", tags=["settings"], dependencies=protected)
 # Artwork stays public: it is loaded through <img> tags, which cannot send a bearer token.
 app.include_router(games.router, prefix="/api/games", tags=["games"])
 

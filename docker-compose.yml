@@ -27,6 +27,8 @@ services:
       GAMEFLEET_SECRET: ${GAMEFLEET_SECRET:-}
       # Game-server containers on this host (needs the socket mount below) are reached through the Docker host.
       DOCKER_SERVER_ADDRESS: ${DOCKER_SERVER_ADDRESS:-host.docker.internal}
+      # Folder that new game servers are created in, as <folder>/<game>/<name>/ (changeable in Settings).
+      GAMEFLEET_SERVERS_DIR: ${GAMEFLEET_SERVERS_DIR:-/srv/gameservers}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -36,6 +38,9 @@ services:
       # Lets GameFleet find, control and measure game-server containers. The socket is root-equivalent
       # on the host; remove this line if you only monitor remote servers.
       - /var/run/docker.sock:/var/run/docker.sock
+      # The servers folder, at the same path as on the host: docker compose hands the host daemon the paths
+      # it sees itself. Remove it if you do not create servers from GameFleet.
+      - ${GAMEFLEET_SERVERS_DIR:-/srv/gameservers}:${GAMEFLEET_SERVERS_DIR:-/srv/gameservers}
 
   frontend:
     container_name: gamefleet-frontend

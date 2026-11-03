@@ -272,6 +272,117 @@ export interface ContainerMount {
 }
 
 /**
+ * CreateJob
+ * A creation in progress or just finished (kept in memory).
+ */
+export interface CreateJob {
+  /** Id */
+  id: string;
+  /** Name */
+  name: string;
+  /** Folder */
+  folder: string;
+  /** Phase */
+  phase:
+    | "writing"
+    | "pulling"
+    | "creating"
+    | "starting"
+    | "waiting"
+    | "done"
+    | "failed";
+  /** Progress */
+  progress?: number | null;
+  /** Started At */
+  started_at: number;
+  /** Finished At */
+  finished_at?: number | null;
+  /** Error */
+  error?: string | null;
+  /** Warning */
+  warning?: string | null;
+  /** Server Id */
+  server_id?: string | null;
+  /**
+   * Started
+   * @default false
+   */
+  started?: boolean;
+  /** Health */
+  health?: string | null;
+  /** Ready Hint */
+  ready_hint?: string | null;
+  /**
+   * Log
+   * @default []
+   */
+  log?: string[];
+}
+
+/** CreatePreview */
+export interface CreatePreview {
+  /** Folder */
+  folder: string;
+  /** Project */
+  project: string;
+  /** Container Name */
+  container_name: string;
+  /** Compose */
+  compose: string;
+  /** Secrets */
+  secrets: string[];
+  /** Ports */
+  ports: string[];
+  /** Holders */
+  holders: PortHolder[];
+  /** Problems */
+  problems: string[];
+}
+
+/** CreateRequest */
+export interface CreateRequest {
+  /** Template */
+  template: string;
+  /**
+   * Name
+   * @minLength 1
+   * @maxLength 100
+   */
+  name: string;
+  /** Slug */
+  slug: string;
+  /**
+   * Values
+   * @default {}
+   */
+  values?: Record<string, string>;
+  /** Tag */
+  tag?: string | null;
+  /** Port */
+  port?: number | null;
+  /**
+   * Eula
+   * @default false
+   */
+  eula?: boolean;
+  /**
+   * Is Public
+   * @default false
+   */
+  is_public?: boolean;
+  /**
+   * Start
+   * @default true
+   */
+  start?: boolean;
+  /**
+   * Stop Conflicting
+   * @default false
+   */
+  stop_conflicting?: boolean;
+}
+
+/**
  * DetectedGame
  * What GameFleet thinks a container is, and how it would be imported.
  */
@@ -323,6 +434,21 @@ export interface DockerStatus {
   error?: string | null;
   /** Address */
   address: string;
+}
+
+/** Eula */
+export interface Eula {
+  /** Env */
+  env: string;
+  /**
+   * Value
+   * @default "TRUE"
+   */
+  value?: string;
+  /** Label */
+  label: string;
+  /** Url */
+  url: string;
 }
 
 /**
@@ -518,6 +644,59 @@ export interface HTTPValidationError {
 }
 
 /**
+ * HostSettingsBase
+ * Settings of this GameFleet installation, edited on the Settings page (one row).
+ */
+export interface HostSettingsBase {
+  /** Servers Dir */
+  servers_dir?: string | null;
+  /**
+   * Owner Uid
+   * @min 0
+   * @max 65535
+   * @default 1000
+   */
+  owner_uid?: number;
+  /**
+   * Owner Gid
+   * @min 0
+   * @max 65535
+   * @default 1000
+   */
+  owner_gid?: number;
+  /** Public Address */
+  public_address?: string | null;
+  /**
+   * Default Memory Gb
+   * @min 1
+   * @max 256
+   * @default 4
+   */
+  default_memory_gb?: number;
+  /** Cpu Limit */
+  cpu_limit?: number | null;
+  /**
+   * Restart Policy
+   * @maxLength 20
+   * @default "unless-stopped"
+   */
+  restart_policy?: string;
+  /**
+   * Stop Grace Seconds
+   * @min 10
+   * @max 3600
+   * @default 60
+   */
+  stop_grace_seconds?: number;
+  /**
+   * Timezone
+   * @maxLength 60
+   * @default "UTC"
+   */
+  timezone?: string;
+}
+
+/**
  * HostStats
  * Resource usage of the container behind a server. Sampled on demand and cached for a few seconds.
  */
@@ -569,6 +748,16 @@ export interface HostStats {
   compose_project?: string | null;
   /** Compose Dir */
   compose_dir?: string | null;
+}
+
+/** ImageTag */
+export interface ImageTag {
+  /** Tag */
+  tag: string;
+  /** Label */
+  label: string;
+  /** Hint */
+  hint?: string | null;
 }
 
 /** ImportRequest */
@@ -645,6 +834,41 @@ export interface MinecraftServerInfo {
   enforces_secure_chat?: boolean | null;
 }
 
+/** ModrinthPack */
+export interface ModrinthPack {
+  /** Slug */
+  slug: string;
+  /** Title */
+  title: string;
+  /**
+   * Description
+   * @default ""
+   */
+  description?: string;
+  /** Icon Url */
+  icon_url?: string | null;
+  /**
+   * Downloads
+   * @default 0
+   */
+  downloads?: number;
+  /**
+   * Versions
+   * @default []
+   */
+  versions?: string[];
+}
+
+/** Option */
+export interface Option {
+  /** Value */
+  value: string;
+  /** Label */
+  label?: string | null;
+  /** Hint */
+  hint?: string | null;
+}
+
 /** PortBinding */
 export interface PortBinding {
   /** Container Port */
@@ -665,6 +889,23 @@ export interface PortConflict {
   server_id?: string | null;
   /** Server Name */
   server_name?: string | null;
+}
+
+/**
+ * PortHolder
+ * Another container that publishes one of the new server's host ports.
+ */
+export interface PortHolder {
+  /** Container Name */
+  container_name: string;
+  /** Server Id */
+  server_id?: string | null;
+  /** Server Name */
+  server_name?: string | null;
+  /** Running */
+  running: boolean;
+  /** Ports */
+  ports: string[];
 }
 
 /** PowerConflict */
@@ -767,6 +1008,58 @@ export interface SessionInfo {
   dev: boolean;
 }
 
+/** SettingsView */
+export interface SettingsView {
+  /** Servers Dir */
+  servers_dir?: string | null;
+  /**
+   * Owner Uid
+   * @min 0
+   * @max 65535
+   * @default 1000
+   */
+  owner_uid?: number;
+  /**
+   * Owner Gid
+   * @min 0
+   * @max 65535
+   * @default 1000
+   */
+  owner_gid?: number;
+  /** Public Address */
+  public_address?: string | null;
+  /**
+   * Default Memory Gb
+   * @min 1
+   * @max 256
+   * @default 4
+   */
+  default_memory_gb?: number;
+  /** Cpu Limit */
+  cpu_limit?: number | null;
+  /**
+   * Restart Policy
+   * @maxLength 20
+   * @default "unless-stopped"
+   */
+  restart_policy?: string;
+  /**
+   * Stop Grace Seconds
+   * @min 10
+   * @max 3600
+   * @default 60
+   */
+  stop_grace_seconds?: number;
+  /**
+   * Timezone
+   * @maxLength 60
+   * @default "UTC"
+   */
+  timezone?: string;
+  /** Servers Dir Problem */
+  servers_dir_problem?: string | null;
+}
+
 /**
  * SteamServerInfo
  * Generic Steam / Source engine (A2S) server information.
@@ -824,6 +1117,140 @@ export interface SteamServerInfo {
   keywords?: string | null;
   /** Rules */
   rules?: Record<string, string> | null;
+}
+
+/** Template */
+export interface Template {
+  /** Id */
+  id: string;
+  game: GameServerType;
+  /** Label */
+  label: string;
+  /** Description */
+  description: string;
+  /** Image */
+  image: string;
+  /**
+   * Tags
+   * @minItems 1
+   */
+  tags: ImageTag[];
+  /** Folder */
+  folder: string;
+  /** Data Path */
+  data_path: string;
+  eula?: Eula | null;
+  /**
+   * Ports
+   * @minItems 1
+   */
+  ports: TemplatePort[];
+  /**
+   * Variables
+   * @default []
+   */
+  variables?: TemplateVariable[];
+  /**
+   * Environment
+   * @default {}
+   */
+  environment?: Record<string, string>;
+  /**
+   * Settings Env
+   * @default {}
+   */
+  settings_env?: Record<string, "owner_uid" | "owner_gid" | "timezone">;
+  /**
+   * Memory Overhead
+   * @min 0
+   * @max 2
+   * @default 0.25
+   */
+  memory_overhead?: number;
+  /**
+   * Tty
+   * @default false
+   */
+  tty?: boolean;
+  /**
+   * Stdin Open
+   * @default false
+   */
+  stdin_open?: boolean;
+  /** Ready Hint */
+  ready_hint?: string | null;
+}
+
+/** TemplatePort */
+export interface TemplatePort {
+  /** Name */
+  name: string;
+  /**
+   * Port
+   * @min 1
+   * @max 65535
+   */
+  port: number;
+  /**
+   * Protocol
+   * @default "tcp"
+   */
+  protocol?: "tcp" | "udp";
+  /**
+   * Publish
+   * @default true
+   */
+  publish?: boolean;
+}
+
+/** TemplateVariable */
+export interface TemplateVariable {
+  /** Env */
+  env: string;
+  /** Label */
+  label: string;
+  /**
+   * Type
+   * @default "text"
+   */
+  type?:
+    | "text"
+    | "number"
+    | "select"
+    | "boolean"
+    | "memory"
+    | "secret"
+    | "modrinth-modpack";
+  /** Default */
+  default?: string | null;
+  /**
+   * Options
+   * @default []
+   */
+  options?: Option[];
+  /** Help */
+  help?: string | null;
+  /** Placeholder */
+  placeholder?: string | null;
+  /**
+   * Required
+   * @default false
+   */
+  required?: boolean;
+  /**
+   * Advanced
+   * @default false
+   */
+  advanced?: boolean;
+  /** Pattern */
+  pattern?: string | null;
+  /** Suggest */
+  suggest?: "minecraft-versions" | null;
+  /**
+   * Show If
+   * @default {}
+   */
+  show_if?: Record<string, string[]>;
 }
 
 /** ValidationError */
@@ -1135,6 +1562,64 @@ export class Api<
     this.request<GameServerPublic, HTTPValidationError>({
       path: `/api/servers`,
       method: "POST",
+      body: data,
+      secure: true,
+      type: ContentType.Json,
+      format: "json",
+      ...params,
+    });
+
+  /**
+   * @description Create the server in the background; follow it with /jobs/{id}.
+   *
+   * @tags create
+   * @name CreateServer
+   * @summary Create
+   * @request POST:/api/create
+   * @secure
+   */
+  createServer = (data: CreateRequest, params: RequestParams = {}) =>
+    this.request<CreateJob, HTTPValidationError>({
+      path: `/api/create`,
+      method: "POST",
+      body: data,
+      secure: true,
+      type: ContentType.Json,
+      format: "json",
+      ...params,
+    });
+
+  /**
+   * @description Settings of this GameFleet installation and whether new servers can be created with them.
+   *
+   * @tags settings
+   * @name GetSettings
+   * @summary Get Settings
+   * @request GET:/api/settings
+   * @secure
+   */
+  getSettings = (params: RequestParams = {}) =>
+    this.request<SettingsView, any>({
+      path: `/api/settings`,
+      method: "GET",
+      secure: true,
+      format: "json",
+      ...params,
+    });
+
+  /**
+   * No description
+   *
+   * @tags settings
+   * @name UpdateSettings
+   * @summary Update Settings
+   * @request PUT:/api/settings
+   * @secure
+   */
+  updateSettings = (data: HostSettingsBase, params: RequestParams = {}) =>
+    this.request<SettingsView, HTTPValidationError>({
+      path: `/api/settings`,
+      method: "PUT",
       body: data,
       secure: true,
       type: ContentType.Json,
@@ -1706,6 +2191,114 @@ export class Api<
       this.request<any, HTTPValidationError>({
         path: `/api/docker/ignored/${containerName}`,
         method: "DELETE",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
+  templates = {
+    /**
+     * @description The games GameFleet can create servers for.
+     *
+     * @tags create
+     * @name GetTemplates
+     * @summary Get Templates
+     * @request GET:/api/create/templates
+     * @secure
+     */
+    getTemplates: (params: RequestParams = {}) =>
+      this.request<Template[], any>({
+        path: `/api/create/templates`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
+  preview = {
+    /**
+     * @description The files a request would write and anything that stops it, without changing anything.
+     *
+     * @tags create
+     * @name PreviewCreate
+     * @summary Preview
+     * @request POST:/api/create/preview
+     * @secure
+     */
+    previewCreate: (data: CreateRequest, params: RequestParams = {}) =>
+      this.request<CreatePreview, HTTPValidationError>({
+        path: `/api/create/preview`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  jobs = {
+    /**
+     * No description
+     *
+     * @tags create
+     * @name GetCreateJob
+     * @summary Get Job
+     * @request GET:/api/create/jobs/{job_id}
+     * @secure
+     */
+    getCreateJob: (jobId: string, params: RequestParams = {}) =>
+      this.request<CreateJob, HTTPValidationError>({
+        path: `/api/create/jobs/${jobId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
+  minecraftVersions = {
+    /**
+     * No description
+     *
+     * @tags create
+     * @name GetMinecraftVersions
+     * @summary Minecraft Versions
+     * @request GET:/api/create/minecraft-versions
+     * @secure
+     */
+    getMinecraftVersions: (params: RequestParams = {}) =>
+      this.request<string[], any>({
+        path: `/api/create/minecraft-versions`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
+  modrinthPacks = {
+    /**
+     * @description Modpacks on Modrinth for the create wizard.
+     *
+     * @tags create
+     * @name SearchModrinthPacks
+     * @summary Modrinth Packs
+     * @request GET:/api/create/modrinth-packs
+     * @secure
+     */
+    searchModrinthPacks: (
+      query: {
+        /**
+         * Q
+         * @minLength 2
+         * @maxLength 100
+         */
+        q: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ModrinthPack[], HTTPValidationError>({
+        path: `/api/create/modrinth-packs`,
+        method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
