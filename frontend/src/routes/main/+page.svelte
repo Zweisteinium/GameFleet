@@ -8,6 +8,7 @@
 	import { loadPref, savePref } from '$lib/prefs';
 	import ServerCard from '$lib/components/ServerCard.svelte';
 	import ServerForm from '$lib/components/ServerForm.svelte';
+	import DeployForm from '$lib/components/DeployForm.svelte';
 	import DiscoveredContainers from '$lib/components/DiscoveredContainers.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
@@ -28,7 +29,8 @@
 	let gameServers = $state<GameServerPublic[]>([]);
 	let loading = $state(true);
 	let refreshing = $state(false);
-	let showForm = $state(false);
+	// 'pick' asks whether to monitor an existing server or deploy a new one.
+	let showForm = $state<false | 'pick' | 'existing' | 'deploy'>(false);
 	let lastRefresh = $state<Date | null>(null);
 	let toolbar = $state<ToolbarState>(DEFAULT_TOOLBAR);
 	let discovered = $state<DiscoveredContainer[]>([]);
@@ -185,8 +187,8 @@
 
 	async function onServerAdded(server: GameServerPublic) {
 		showForm = false;
-		gameServers = [...gameServers, server];
-		await refreshLiveInfo();
+		gameServers = [...gameServers.filter((s) => s.id !== server.id), server];
+		await Promise.all([refreshLiveInfo(), loadDiscovered()]);
 	}
 </script>
 
@@ -227,7 +229,7 @@
 						>
 					</button>
 				{/if}
-				<button class="btn-primary" onclick={() => (showForm = true)}>
+				<button class="btn-primary" onclick={() => (showForm = 'pick')}>
 					<Icon name="plus" size={15} />
 					Add server
 				</button>
@@ -248,7 +250,7 @@
 					Add a server to see its status, players and details here. Game servers running in Docker
 					on this host are found on their own.
 				</p>
-				<button class="btn-primary" onclick={() => (showForm = true)}>
+				<button class="btn-primary" onclick={() => (showForm = 'pick')}>
 					<Icon name="plus" size={15} />
 					Add server
 				</button>
@@ -307,8 +309,27 @@
 	{/if}
 </div>
 
-{#if showForm}
+{#if showForm === 'pick'}
 	<Modal title="Add server" onClose={() => (showForm = false)}>
+		<div class="grid gap-2 sm:grid-cols-2">
+			<button class="card hover:border-line-2 p-4 text-left transition-colors" onclick={() => (showForm = 'deploy')}>
+				<Icon name="package" size={20} class="text-accent mb-2" />
+				<p class="text-sm font-semibold">Deploy a new server</p>
+				<p class="hint mt-1">Create a game server in Docker on this host from a template.</p>
+			</button>
+			<button class="card hover:border-line-2 p-4 text-left transition-colors" onclick={() => (showForm = 'existing')}>
+				<Icon name="globe" size={20} class="text-accent mb-2" />
+				<p class="text-sm font-semibold">Add an existing server</p>
+				<p class="hint mt-1">Watch a server by address: yours, a friend's or a public one.</p>
+			</button>
+		</div>
+	</Modal>
+{:else if showForm === 'existing'}
+	<Modal title="Add an existing server" onClose={() => (showForm = false)}>
 		<ServerForm onSaved={onServerAdded} onCancel={() => (showForm = false)} />
+	</Modal>
+{:else if showForm === 'deploy'}
+	<Modal title="Deploy a new server" size="lg" onClose={() => (showForm = false)}>
+		<DeployForm onDeployed={onServerAdded} onCancel={() => (showForm = false)} />
 	</Modal>
 {/if}

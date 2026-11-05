@@ -234,6 +234,46 @@ export interface BaseServerInfo {
   error_message?: string | null;
 }
 
+/** ConfigFile */
+export interface ConfigFile {
+  /** Path */
+  path: string;
+  /** Label */
+  label: string;
+  /** Size */
+  size: number;
+}
+
+/** ConfigInfo */
+export interface ConfigInfo {
+  /** Supported */
+  supported: boolean;
+  /** Reason */
+  reason?: string | null;
+  /** Settings File */
+  settings_file?: string | null;
+  /**
+   * Settings
+   * @default []
+   */
+  settings?: SettingValue[];
+  /**
+   * Files
+   * @default []
+   */
+  files?: ConfigFile[];
+  /**
+   * Restart Required Hint
+   * @default true
+   */
+  restart_required_hint?: boolean;
+  /**
+   * Restart Needed
+   * @default false
+   */
+  restart_needed?: boolean;
+}
+
 /** ContainerInfo */
 export interface ContainerInfo {
   /** Id */
@@ -269,6 +309,179 @@ export interface ContainerMount {
   source: string;
   /** Destination */
   destination: string;
+}
+
+/** DeployCheck */
+export interface DeployCheck {
+  /** Template */
+  template: string;
+  /** Name */
+  name: string;
+  /**
+   * Host Ports
+   * @default {}
+   */
+  host_ports?: Record<string, number>;
+}
+
+/** DeployCheckResult */
+export interface DeployCheckResult {
+  /** Slug */
+  slug: string;
+  /** Name Free */
+  name_free: boolean;
+  /** Directory */
+  directory: string;
+  /**
+   * Conflicts
+   * @default []
+   */
+  conflicts?: PortIssue[];
+  /**
+   * Warnings
+   * @default []
+   */
+  warnings?: PortIssue[];
+}
+
+/**
+ * DeployField
+ * One environment variable of a template, shown as a form field.
+ */
+export interface DeployField {
+  /** Key */
+  key: string;
+  /** Label */
+  label: string;
+  /** Type */
+  type: "bool" | "int" | "str" | "enum" | "secret";
+  /** Default */
+  default?: boolean | number | string | null;
+  /**
+   * Required
+   * @default false
+   */
+  required?: boolean;
+  /**
+   * Options
+   * @default []
+   */
+  options?: string[];
+  /**
+   * Description
+   * @default ""
+   */
+  description?: string;
+  /**
+   * Group
+   * @default ""
+   */
+  group?: string;
+}
+
+/** DeployJob */
+export interface DeployJob {
+  /** Id */
+  id: string;
+  /** Template */
+  template: string;
+  /** Name */
+  name: string;
+  /** Container Name */
+  container_name: string;
+  /** Directory */
+  directory: string;
+  /**
+   * Phase
+   * @default "queued"
+   */
+  phase?:
+    | "queued"
+    | "pulling"
+    | "creating"
+    | "starting"
+    | "importing"
+    | "done"
+    | "failed";
+  /** Progress */
+  progress?: number | null;
+  /** Detail */
+  detail?: string | null;
+  /** Error */
+  error?: string | null;
+  /** Server Id */
+  server_id?: string | null;
+  /** Started At */
+  started_at: number;
+  /** Finished At */
+  finished_at?: number | null;
+}
+
+/** DeployPort */
+export interface DeployPort {
+  /** Label */
+  label: string;
+  /** Container Port */
+  container_port: number;
+  /** Protocol */
+  protocol: "tcp" | "udp";
+  /** Default Host Port */
+  default_host_port?: number | null;
+}
+
+/** DeployRequest */
+export interface DeployRequest {
+  /** Template */
+  template: string;
+  /**
+   * Name
+   * @minLength 1
+   * @maxLength 100
+   */
+  name: string;
+  /**
+   * Host Ports
+   * @default {}
+   */
+  host_ports?: Record<string, number>;
+  /**
+   * Values
+   * @default {}
+   */
+  values?: Record<string, boolean | number | string | null>;
+  /**
+   * Is Public
+   * @default false
+   */
+  is_public?: boolean;
+  /**
+   * Start
+   * @default true
+   */
+  start?: boolean;
+}
+
+/** DeployTemplate */
+export interface DeployTemplate {
+  /** Id */
+  id: string;
+  game: GameServerType;
+  /** Label */
+  label: string;
+  /** Image */
+  image: string;
+  /** Description */
+  description: string;
+  /** Memory Hint */
+  memory_hint: string;
+  /** Fields */
+  fields: DeployField[];
+  /** Ports */
+  ports: DeployPort[];
+  /** Data Dir */
+  data_dir: string;
+  /** Stop Timeout */
+  stop_timeout: number;
 }
 
 /**
@@ -325,6 +538,20 @@ export interface DockerStatus {
   address: string;
 }
 
+/** DownloadToken */
+export interface DownloadToken {
+  /** Token */
+  token: string;
+  /** Expires At */
+  expires_at: number;
+}
+
+/** DownloadTokenRequest */
+export interface DownloadTokenRequest {
+  /** Path */
+  path: string;
+}
+
 /**
  * FactorioServerInfo
  * Factorio-specific server information (fetched via RCON).
@@ -378,6 +605,37 @@ export interface FactorioServerInfo {
   evolution?: Record<string, number> | null;
   /** Seed */
   seed?: string | null;
+}
+
+/** FileContent */
+export interface FileContent {
+  /** Path */
+  path: string;
+  /** Content */
+  content: string;
+  /** Size */
+  size: number;
+}
+
+/** FileUpdate */
+export interface FileUpdate {
+  /** Path */
+  path: string;
+  /** Content */
+  content: string;
+}
+
+/** FileWritten */
+export interface FileWritten {
+  /** Path */
+  path: string;
+  /** Size */
+  size: number;
+  /**
+   * Restart Needed
+   * @default true
+   */
+  restart_needed?: boolean;
 }
 
 /** GameServerCreate */
@@ -667,6 +925,20 @@ export interface PortConflict {
   server_name?: string | null;
 }
 
+/** PortIssue */
+export interface PortIssue {
+  /** Label */
+  label: string;
+  /** Port */
+  port: number;
+  /** Protocol */
+  protocol: string;
+  /** Container */
+  container: string;
+  /** State */
+  state: string;
+}
+
 /** PowerConflict */
 export interface PowerConflict {
   detail: PowerConflictDetail;
@@ -765,6 +1037,43 @@ export interface SessionInfo {
   admin: boolean;
   /** Dev */
   dev: boolean;
+}
+
+/** SettingValue */
+export interface SettingValue {
+  /** Key */
+  key: string;
+  /** Label */
+  label: string;
+  /** Type */
+  type: "bool" | "int" | "str" | "enum";
+  /**
+   * Description
+   * @default ""
+   */
+  description?: string;
+  /**
+   * Options
+   * @default []
+   */
+  options?: string[];
+  /**
+   * Group
+   * @default ""
+   */
+  group?: string;
+  /** Value */
+  value?: boolean | number | string | null;
+  /** Env Override */
+  env_override?: string | null;
+  /** Locked */
+  locked?: string | null;
+}
+
+/** SettingsUpdate */
+export interface SettingsUpdate {
+  /** Values */
+  values: Record<string, boolean | number | string | null>;
 }
 
 /**
@@ -1143,6 +1452,26 @@ export class Api<
     });
 
   /**
+   * @description Create and start a new server. Returns the job to poll; the server appears in the fleet when it is done.
+   *
+   * @tags deploy
+   * @name DeployServer
+   * @summary Deploy
+   * @request POST:/api/deploy
+   * @secure
+   */
+  deployServer = (data: DeployRequest, params: RequestParams = {}) =>
+    this.request<DeployJob, HTTPValidationError>({
+      path: `/api/deploy`,
+      method: "POST",
+      body: data,
+      secure: true,
+      type: ContentType.Json,
+      format: "json",
+      ...params,
+    });
+
+  /**
    * No description
    *
    * @name RootGet
@@ -1159,7 +1488,7 @@ export class Api<
 
   login = {
     /**
-     * @description Exchange username and password for a bearer token.
+     * @description Exchange username and password for a bearer token. Ten failures from one address block it for ten minutes (429 with Retry-After).
      *
      * @tags auth
      * @name Login
@@ -1551,7 +1880,31 @@ export class Api<
       }),
 
     /**
-     * @description Download one of the listed backups. Accepts the bearer token as `?token=` so a plain link works.
+     * @description A ten-minute link token for one backup, so the download link carries no session token.
+     *
+     * @tags servers
+     * @name CreateDownloadToken
+     * @summary Create Download Token
+     * @request POST:/api/servers/{server_id}/backups/download-token
+     * @secure
+     */
+    createDownloadToken: (
+      serverId: string,
+      data: DownloadTokenRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<DownloadToken, HTTPValidationError>({
+        path: `/api/servers/${serverId}/backups/download-token`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description Download one of the listed backups. Needs a login, or `?dl=` from `createDownloadToken`.
      *
      * @tags servers
      * @name DownloadBackup
@@ -1564,8 +1917,8 @@ export class Api<
       query: {
         /** Path */
         path: string;
-        /** Token */
-        token?: string | null;
+        /** Dl */
+        dl?: string | null;
       },
       params: RequestParams = {},
     ) =>
@@ -1574,6 +1927,98 @@ export class Api<
         method: "GET",
         query: query,
         secure: true,
+        ...params,
+      }),
+
+    /**
+     * @description The important settings of the server as a form, and the text files it may edit.
+     *
+     * @tags servers
+     * @name GetConfig
+     * @summary Get Config
+     * @request GET:/api/servers/{server_id}/config
+     * @secure
+     */
+    getConfig: (serverId: string, params: RequestParams = {}) =>
+      this.request<ConfigInfo, HTTPValidationError>({
+        path: `/api/servers/${serverId}/config`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description Write changed settings into the settings file; the server reads them on its next start.
+     *
+     * @tags servers
+     * @name UpdateSettings
+     * @summary Update Settings
+     * @request PUT:/api/servers/{server_id}/config/settings
+     * @secure
+     */
+    updateSettings: (
+      serverId: string,
+      data: SettingsUpdate,
+      params: RequestParams = {},
+    ) =>
+      this.request<ConfigInfo, HTTPValidationError>({
+        path: `/api/servers/${serverId}/config/settings`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description One of the listed text files (up to 1 MiB).
+     *
+     * @tags servers
+     * @name GetConfigFile
+     * @summary Get Config File
+     * @request GET:/api/servers/{server_id}/config/file
+     * @secure
+     */
+    getConfigFile: (
+      serverId: string,
+      query: {
+        /** Path */
+        path: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<FileContent, HTTPValidationError>({
+        path: `/api/servers/${serverId}/config/file`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description Replace one of the listed text files; JSON files must parse.
+     *
+     * @tags servers
+     * @name UpdateConfigFile
+     * @summary Update Config File
+     * @request PUT:/api/servers/{server_id}/config/file
+     * @secure
+     */
+    updateConfigFile: (
+      serverId: string,
+      data: FileUpdate,
+      params: RequestParams = {},
+    ) =>
+      this.request<FileWritten, HTTPValidationError>({
+        path: `/api/servers/${serverId}/config/file`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
         ...params,
       }),
   };
@@ -1706,6 +2151,102 @@ export class Api<
       this.request<any, HTTPValidationError>({
         path: `/api/docker/ignored/${containerName}`,
         method: "DELETE",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
+  templates = {
+    /**
+     * @description The games GameFleet can deploy, with the settings each one asks for and its default ports.
+     *
+     * @tags deploy
+     * @name GetDeployTemplates
+     * @summary Get Templates
+     * @request GET:/api/deploy/templates
+     * @secure
+     */
+    getDeployTemplates: (params: RequestParams = {}) =>
+      this.request<DeployTemplate[], any>({
+        path: `/api/deploy/templates`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
+  root = {
+    /**
+     * @description Where new servers are created on the host, and why deploys would fail if that is unusable.
+     *
+     * @tags deploy
+     * @name GetDeployRoot
+     * @summary Get Root
+     * @request GET:/api/deploy/root
+     * @secure
+     */
+    getDeployRoot: (params: RequestParams = {}) =>
+      this.request<any, any>({
+        path: `/api/deploy/root`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
+  check = {
+    /**
+     * @description Whether the name and the host ports are free before anything is created.
+     *
+     * @tags deploy
+     * @name CheckDeploy
+     * @summary Check
+     * @request POST:/api/deploy/check
+     * @secure
+     */
+    checkDeploy: (data: DeployCheck, params: RequestParams = {}) =>
+      this.request<DeployCheckResult, HTTPValidationError>({
+        path: `/api/deploy/check`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  jobs = {
+    /**
+     * No description
+     *
+     * @tags deploy
+     * @name GetDeployJobs
+     * @summary Jobs
+     * @request GET:/api/deploy/jobs
+     * @secure
+     */
+    getDeployJobs: (params: RequestParams = {}) =>
+      this.request<DeployJob[], any>({
+        path: `/api/deploy/jobs`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags deploy
+     * @name GetDeployJob
+     * @summary Job
+     * @request GET:/api/deploy/jobs/{job_id}
+     * @secure
+     */
+    getDeployJob: (jobId: string, params: RequestParams = {}) =>
+      this.request<DeployJob, HTTPValidationError>({
+        path: `/api/deploy/jobs/${jobId}`,
+        method: "GET",
         secure: true,
         format: "json",
         ...params,

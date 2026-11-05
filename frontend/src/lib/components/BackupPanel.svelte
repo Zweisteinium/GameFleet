@@ -175,11 +175,22 @@
 		}
 	}
 
-	function downloadUrl(backup: Backup): string {
-		const params = new URLSearchParams(
-			session.token ? { path: backup.path, token: session.token } : { path: backup.path }
-		);
-		return `/api/servers/${encodeURIComponent(server.id)}/backups/download?${params}`;
+	/** Downloads go through a short-lived link token, so the session token never appears in a URL. */
+	async function download(backup: Backup) {
+		error = null;
+		try {
+			const { token } = (await api.serverId.createDownloadToken(server.id, { path: backup.path })).data;
+			const params = new URLSearchParams({ path: backup.path, dl: token });
+			const link = document.createElement('a');
+			link.href = `/api/servers/${encodeURIComponent(server.id)}/backups/download?${params}`;
+			link.download = backup.file;
+			link.rel = 'external';
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+		} catch (err) {
+			error = detail(err, 'Could not prepare the download.');
+		}
 	}
 
 	const when = (unix: number) =>
@@ -288,13 +299,11 @@
 									>
 										<Icon name="history" size={14} />Restore
 									</button>
-									<a
+									<button
 										class="btn-ghost btn-icon h-8 w-8"
-										href={downloadUrl(backup)}
-										download={backup.file}
-										rel="external"
 										title="Download"
-										aria-label="Download {backup.file}"><Icon name="download" size={15} /></a
+										aria-label="Download {backup.file}"
+										onclick={() => download(backup)}><Icon name="download" size={15} /></button
 									>
 								</li>
 							{/each}

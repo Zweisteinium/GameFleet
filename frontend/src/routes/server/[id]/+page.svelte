@@ -23,6 +23,7 @@
 	import ServerProperties from '$lib/components/ServerProperties.svelte';
 	import HostPanel from '$lib/components/HostPanel.svelte';
 	import BackupPanel from '$lib/components/BackupPanel.svelte';
+	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 	import { loggedIn } from '$lib/auth.svelte';
 	import { confirmDialog } from '$lib/confirm.svelte';
 	import GameArt from '$lib/components/GameArt.svelte';
@@ -291,6 +292,7 @@
 		{#if isLocal}
 			<HostPanel {server} stats={hostStats} onPower={power} />
 			{#if loggedIn()}
+				<SettingsPanel {server} running={hostStats?.state === 'running'} onRestart={() => power('restart')} />
 				<BackupPanel
 					{server}
 					running={hostStats?.state === 'running'}
