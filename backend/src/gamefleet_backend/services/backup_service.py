@@ -387,6 +387,17 @@ rm -rf "$S"'''
 MKDIR = 'rm -rf "$S"; mkdir -p "$S"'
 
 
+def clean_temp_files() -> None:
+    """Uploads and copies of a restore that a crash left behind in the temp directory."""
+    folder = tempfile.gettempdir()
+    for name in os.listdir(folder):
+        if name.startswith("gamefleet-restore-"):
+            try:
+                os.unlink(os.path.join(folder, name))
+            except OSError:
+                pass
+
+
 # ---- service ----------------------------------------------------------------------------------------------
 
 class BackupService:

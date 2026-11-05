@@ -5,9 +5,10 @@ from importlib.metadata import version as package_version
 
 from fastapi import Depends, FastAPI
 
-from .api import auth as auth_api, docker, games, servers
+from .api import auth as auth_api, deploy, docker, games, servers
 from .auth import current_user, log_startup_state
 from .db.session import init_db
+from .services.backup_service import clean_temp_files
 from .services.docker_discovery_service import DISCOVERY_INTERVAL, discovery_loop
 from .settings import DEV
 
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
         logging.getLogger(__name__).warning("Development mode (GAMEFLEET_DEV=true): API docs are served; not for production")
     log_startup_state()
     await init_db()
+    clean_temp_files()
     task = asyncio.create_task(discovery_loop()) if DISCOVERY_INTERVAL > 0 else None
     yield
     if task:
@@ -44,6 +46,7 @@ app.include_router(auth_api.router, prefix="/api/auth", tags=["auth"])
 # Reading servers is open to visitors (limited to public servers); the router protects everything else itself.
 app.include_router(servers.router, prefix="/api/servers", tags=["servers"])
 app.include_router(docker.router, prefix="/api/docker", tags=["docker"], dependencies=protected)
+app.include_router(deploy.router, prefix="/api/deploy", tags=["deploy"], dependencies=protected)
 # Artwork stays public: it is loaded through <img> tags, which cannot send a bearer token.
 app.include_router(games.router, prefix="/api/games", tags=["games"])
 

@@ -124,6 +124,58 @@ def verify_token(token: str) -> Optional[User]:
         return None
 
 
+DOWNLOAD_TTL = 600  # seconds a download link stays valid
+
+
+def create_download_token(server_id: str, path: str) -> tuple[str, int]:
+    """A link token for one backup of one server; it cannot be used for anything else and expires soon,
+    unlike the session token, which must not end up in URLs and access logs."""
+    expires_at = int(time.time()) + DOWNLOAD_TTL
+    payload = f"dl|{server_id}|{expires_at}|{path}".encode()
+    signature = hmac.new(SECRET, payload, hashlib.sha256).digest()
+    return f"{_b64(payload)}.{_b64(signature)}", expires_at
+
+
+def verify_download_token(token: str, server_id: str, path: str) -> bool:
+    try:
+        payload_b64, signature_b64 = token.split(".", 1)
+        payload = _unb64(payload_b64)
+        if not hmac.compare_digest(hmac.new(SECRET, payload, hashlib.sha256).digest(), _unb64(signature_b64)):
+            return False
+        kind, token_server, expires_at, token_path = payload.decode().split("|", 3)
+        return kind == "dl" and token_server == server_id and token_path == path and int(expires_at) >= time.time()
+    except (ValueError, TypeError):
+        return False
+
+
+# Failed logins per client address: (count, window start). Enough to slow down guessing without a database.
+LOGIN_ATTEMPTS = int(os.getenv("GAMEFLEET_LOGIN_ATTEMPTS", "10"))
+LOGIN_WINDOW = 600  # seconds
+_failures: dict[str, tuple[int, float]] = {}
+
+
+def login_blocked(client: str) -> int:
+    """Seconds the client has to wait before another attempt, 0 when it may try."""
+    count, since = _failures.get(client, (0, 0.0))
+    if time.time() - since > LOGIN_WINDOW:
+        _failures.pop(client, None)
+        return 0
+    return int(since + LOGIN_WINDOW - time.time()) + 1 if count >= LOGIN_ATTEMPTS else 0
+
+
+def login_failed(client: str) -> None:
+    count, since = _failures.get(client, (0, 0.0))
+    if time.time() - since > LOGIN_WINDOW:
+        count, since = 0, time.time()
+    _failures[client] = (count + 1, since or time.time())
+    if len(_failures) > 10000:  # a flood of addresses must not grow memory without bound
+        _failures.clear()
+
+
+def login_succeeded(client: str) -> None:
+    _failures.pop(client, None)
+
+
 def authenticate(username: str, password: str) -> Optional[User]:
     stored = USERS.get(username)
     if stored is None:
@@ -164,13 +216,14 @@ async def current_user(user: Optional[User] = Depends(optional_user)) -> Optiona
     return user
 
 
-async def download_user(token: Optional[str] = Query(default=None), user: Optional[User] = Depends(optional_user)) -> Optional[User]:
-    """`current_user` for links the browser opens itself (file downloads), which cannot carry a header: the
-    token may come as a query parameter instead."""
-    if token is not None and AUTH_ENABLED:
-        user = verify_token(token)
-        if user is None:
+async def download_user(server_id: str, path: str = Query(...), dl: Optional[str] = Query(default=None),
+                        user: Optional[User] = Depends(optional_user)) -> Optional[User]:
+    """`current_user` for links the browser opens itself (file downloads), which cannot carry a header: a
+    download token from `create_download_token` for this very server and path is accepted instead."""
+    if user is None and dl is not None and AUTH_ENABLED:
+        if not verify_download_token(dl, server_id, path):
             raise _unauthorized()
+        return User(name="download")
     return await current_user(user)
 
 

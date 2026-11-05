@@ -4,13 +4,14 @@ Everything here works on the *list* representation of containers (one API call, 
 except where the full config is needed (environment variables for RCON passwords).
 """
 import asyncio
+from contextlib import asynccontextmanager
 import io
 import logging
 import os
 import re
 import tarfile
 import time
-from typing import Any, Iterable, Iterator, Optional
+from typing import Any, AsyncIterator, Callable, Iterable, Iterator, Optional
 
 import docker
 import docker.errors
@@ -337,13 +338,89 @@ class DockerService:
             return code if code is not None else -1, output.decode("utf-8", errors="replace")
         return await self._call(run, long=True)
 
-    async def put_archive(self, name: str, path: str, data: Iterable[bytes]) -> None:
+    async def put_archive(self, name: str, path: str, data: "bytes | Iterable[bytes]") -> None:
         """Extract a tar stream into `path` of the container (works while it is stopped)."""
         await self._call(lambda c: c.api.put_archive(name, path, data), long=True)
 
     async def get_archive(self, name: str, path: str) -> tuple[Iterator[bytes], dict[str, Any]]:
         """Tar stream of a path in the container plus its stat (size, mtime); works while it is stopped."""
         return await self._call(lambda c: c.api.get_archive(name, path))
+
+    async def stat_file(self, name: str, path: str) -> Optional[dict[str, Any]]:
+        """Docker's stat of a path in the container (name, size, mode, mtime), None when it does not exist."""
+        def read(c: docker.DockerClient) -> Optional[dict[str, Any]]:
+            try:
+                stream, stat = c.api.get_archive(name, path)
+            except docker.errors.NotFound:
+                return None
+            for _ in stream:  # drain, the archive itself is not wanted
+                pass
+            return stat
+        return await self._call(read)
+
+    @asynccontextmanager
+    async def container_shell(self, name: str) -> AsyncIterator[Callable]:
+        """`run(script, **env)` inside the game container while it runs, else in a helper that shares its
+        mounts (create_helper). Raises RuntimeError with the script's last output line on failure."""
+        running = (await self.inspect(name)).get("State", {}).get("Running")
+        helper = None if running else await self.create_helper(name)
+        try:
+            async def run(script: str, **env: str) -> str:
+                code, output = await self.shell(helper or name, script, env)
+                if code != 0:
+                    raise RuntimeError(output.strip().splitlines()[-1] if output.strip() else f"script failed ({code})")
+                return output
+            yield run
+        finally:
+            if helper:
+                await self.remove_container(helper)
+
+    # ---- images and new containers (deploy) ----------------------------------------------------------
+
+    async def pull(self, image: str, progress: Callable[[int, int], None]) -> None:
+        """Pull an image, reporting (layers done, layers seen) as Docker streams its status."""
+        def run(c: docker.DockerClient) -> None:
+            repo, _, tag = image.partition("@")[0].rpartition(":")
+            if not repo or "/" in tag:
+                repo, tag = image, "latest"
+            seen: set[str] = set()
+            done: set[str] = set()
+            for event in c.api.pull(repo, tag=tag, stream=True, decode=True):
+                if "error" in event:
+                    raise docker.errors.APIError(event["error"], explanation=event["error"])
+                layer = event.get("id")
+                status = event.get("status", "")
+                if layer:
+                    seen.add(layer)
+                    if status in ("Pull complete", "Already exists"):
+                        done.add(layer)
+                    progress(len(done), len(seen))
+        await self._call(run, long=True)
+
+    async def create_container(self, **kwargs: Any) -> str:
+        """Create (not start) a container through the low-level API; kwargs go to `create_container`
+        except `host_config`, which goes through `create_host_config`."""
+        def run(c: docker.DockerClient) -> str:
+            host_config = kwargs.pop("host_config", None)
+            if host_config is not None:
+                kwargs["host_config"] = c.api.create_host_config(**host_config)
+            return c.api.create_container(**kwargs)["Id"]
+        return await self._call(run)
+
+    async def start(self, name: str) -> None:
+        await self._call(lambda c: c.api.start(name))
+
+    async def host_bindings(self) -> list[dict[str, Any]]:
+        """Every published host port of every container: {container, state, port, protocol, ip}."""
+        result: list[dict[str, Any]] = []
+        for raw in await self.list_raw():
+            raw = await self.complete(raw)
+            name = map_container(raw).name
+            for p in raw.get("Ports") or []:
+                if p.get("PublicPort"):
+                    result.append({"container": name, "state": raw.get("State"), "port": int(p["PublicPort"]),
+                                   "protocol": p.get("Type", "tcp"), "ip": p.get("IP", "")})
+        return result
 
     # ---- power ----------------------------------------------------------------------------------------
 

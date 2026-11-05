@@ -27,6 +27,8 @@ services:
       GAMEFLEET_SECRET: ${GAMEFLEET_SECRET:-}
       # Game-server containers on this host (needs the socket mount below) are reached through the Docker host.
       DOCKER_SERVER_ADDRESS: ${DOCKER_SERVER_ADDRESS:-host.docker.internal}
+      # Host directory where deployed servers get their data and compose file (<root>/<game>/<name>).
+      SERVERS_ROOT: ${SERVERS_ROOT:-/opt/gamefleet/servers}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
