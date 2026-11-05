@@ -149,7 +149,7 @@
 			</div>
 		</div>
 
-		{#if liveInfo?.error_message}
+		{#if liveInfo?.error_message && liveInfo.status !== ServerStatus.Starting}
 			<div class="border-line text-bad flex items-start gap-2 border-t px-4 py-2 text-xs">
 				<Icon name="alert" size={14} class="mt-0.5 shrink-0" />
 				<span class="line-clamp-2">{liveInfo.error_message}</span>

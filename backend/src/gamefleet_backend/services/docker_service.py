@@ -269,7 +269,12 @@ class DockerService:
                     containers = await self.list_raw()
                 except (DockerUnavailable, docker.errors.DockerException, OSError):
                     return None
-                self._states = (time.monotonic(), {map_container(c).name: c.get("State", "unknown") for c in containers})
+                # "starting" while a running container's health check has not passed yet.
+                self._states = (time.monotonic(), {
+                    map_container(c).name: "starting" if c.get("State") == "running" and "(health: starting)" in (c.get("Status") or "")
+                    else c.get("State", "unknown")
+                    for c in containers
+                })
             return self._states[1]
 
     async def inspect(self, name: str) -> dict[str, Any]:

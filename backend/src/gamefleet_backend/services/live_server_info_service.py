@@ -29,8 +29,10 @@ class LiveServerInfoService:
         # answer with whichever container currently owns it.
         if server.source == "docker" and server.container_name:
             states = await docker_service.states()
-            if states is not None and states.get(server.container_name) != "running":
-                state = states.get(server.container_name)
+            state = states.get(server.container_name) if states is not None else "running"
+            if state == "starting":
+                return BaseServerInfo(status=ServerStatus.STARTING, error_message="The server is starting up")
+            if state != "running":
                 message = f"The container is {state}" if state else "The container no longer exists"
                 return BaseServerInfo(status=ServerStatus.OFFLINE, error_message=message)
 

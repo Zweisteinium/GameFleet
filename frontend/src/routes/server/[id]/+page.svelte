@@ -325,7 +325,12 @@
 				</div>
 			</div>
 		{:else}
-			{#if liveInfo.error_message}
+			{#if liveInfo.status === 'starting'}
+				<div class="notice tone-accent items-center py-2.5">
+					<Icon name="refresh" size={16} class="shrink-0 animate-spin" />
+					<p>The server is starting. Live data appears once it answers.</p>
+				</div>
+			{:else if liveInfo.error_message}
 				<div class="notice tone-warn py-2.5">
 					<Icon name="alert" size={16} class="mt-0.5 shrink-0" />
 					<div>

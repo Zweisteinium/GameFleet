@@ -66,7 +66,7 @@
 		)
 	);
 
-	const STATUS_RANK: Record<string, number> = { online: 0, unknown: 1, offline: 2 };
+	const STATUS_RANK: Record<string, number> = { online: 0, starting: 1, unknown: 2, offline: 3 };
 
 	const visibleServers = $derived.by(() => {
 		const query = toolbar.search.trim().toLowerCase();
