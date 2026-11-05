@@ -71,6 +71,8 @@ Then open http://localhost:3000. Visitors see the servers you mark as public, an
 - Search, filters, sorting, grid and list view, light and dark theme, real game artwork
 - Public by default: visitors see the servers you mark as public, signing in unlocks the rest
 - Game servers in Docker on the same host are recognised automatically: start, stop, restart, CPU, memory and disk usage
+- Deploy new servers from a template: Minecraft Java and Bedrock, Factorio, Valheim and Satisfactory
+- Edit server settings in a form (`server.properties`, Factorio's server settings) or any config file in a raw editor
 - Modpack detection for Minecraft (Modrinth, CurseForge, FTB, GTNH)
 - Restore from the backups your servers already make, or from an uploaded file
 
@@ -96,6 +98,18 @@ The port of a server is always the one players connect to. Query and RCON ports 
 With the Docker socket mounted, GameFleet looks at every container on the host and recognises game servers by their image (`itzg/minecraft-server`, `factoriotools/factorio`, `wolveix/satisfactory-server`, `lloesche/valheim-server` and many more). Container names and ports are used as a hint when the image is unknown. There is nothing to label or configure, because data paths, ports and RCON passwords are read from the container itself.
 
 **Import from Docker** on the dashboard adds all running game servers at once. Single containers, stopped ones included, can be imported from the host panel. Several instances of one game on the same port are fine too: starting one whose port is taken offers to stop the other first.
+
+## Deploying servers
+
+**Add server → Deploy a new server** creates a game server in Docker on the GameFleet host. Pick a game, give it a name, fill in the few settings that matter (version, memory, passwords, max players) and the host ports, and GameFleet pulls the image, creates the container and adds it to the dashboard. Templates exist for Minecraft Java (`itzg/minecraft-server`, with Paper, Fabric, Forge, NeoForge and modpacks from Modrinth or CurseForge), Minecraft Bedrock, Factorio, Valheim and Satisfactory.
+
+Each server lives in `SERVERS_ROOT/<game>/<name>` on the host (default `/opt/gamefleet/servers`), with its data folder and a `docker-compose.yml` that describes the container, so you can keep managing it by hand with `docker compose` whenever you like. Ports are checked against the other containers before anything is created.
+
+## Settings
+
+Servers in Docker get a **Settings** panel with the important options as a form: for Minecraft the `server.properties` keys such as MOTD, difficulty, game mode, PvP, whitelist and view distance, for Factorio the `server-settings.json` values. Anything else is reachable through **Edit file**, a raw editor for the known config files of each game (ops and whitelist, Paper and Spigot configs, Factorio map settings, Valheim admin lists, Satisfactory ini files). Changes are written to the container and apply on the next start; the panel offers the restart.
+
+Settings that the container sets from its environment (itzg's `MOTD`, `MAX_PLAYERS` and the like) are shown but locked, because the image rewrites them on every start. Change those in the compose file.
 
 ## Backups
 
@@ -124,11 +138,12 @@ Set these in `.env` when running from source, or in the compose file:
 | `DATABASE_URL` | – | Full connection URL that replaces the `DB_*` values, e.g. `postgresql+asyncpg://gamefleet:secret@db.example.com:5432/gamefleet` |
 | `FRONTEND_PORT`, `BACKEND_PORT` | `3000`, `8000` | Published ports when running from source. Browsers only need the frontend |
 | `DOCKER_SERVER_ADDRESS` | `host.docker.internal` | Address GameFleet uses to reach game servers in Docker |
+| `SERVERS_ROOT` | `/opt/gamefleet/servers` | Host folder where deployed servers get their data and compose file |
 | `GAMEFLEET_DEV` | `false` | Development mode with API docs at `/swagger` and verbose logs. Not meant for production |
 
 ## Development
 
-You need [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io/) and Docker. Run `make install` and `make db`, then `make backend` and `make frontend` in two terminals (API on port 8000, dashboard on 3000, both reload on changes). `make check` type-checks and lints, and `make swagger` regenerates the API client after model changes.
+You need [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io/) and Docker. Run `make install` and `make db`, then `make backend` and `make frontend` in two terminals (API on port 8000, dashboard on 3000, both reload on changes). `make check` type-checks and lints, `make test` runs the backend tests, and `make swagger` regenerates the API client after model changes.
 
 ## License
 

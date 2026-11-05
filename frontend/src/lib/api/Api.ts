@@ -1407,7 +1407,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
 /**
  * @title Game Server Dashboard API
- * @version 1.4.0
+ * @version 2.0.0
  *
  * API for managing and monitoring game servers
  */
