@@ -67,7 +67,7 @@ Then open http://localhost:3000. Visitors see the servers you mark as public, an
 
 ## Features
 
-- Live status, players, version, map, MOTD, mods and game-specific details for 20+ games, refreshed every 30 seconds
+- Live status, players, version, map, MOTD, mods and game-specific details for 30 games, refreshed every 30 seconds
 - Search, filters, sorting, grid and list view, light and dark theme, real game artwork
 - Public by default: visitors see the servers you mark as public, signing in unlocks the rest
 - Game servers in Docker on the same host are recognised automatically: start, stop, restart, CPU, memory and disk usage
@@ -88,7 +88,7 @@ GameFleet asks every server directly with the game's own protocol, so there is n
 | Satisfactory | HTTPS API of the dedicated server, with a passwordless client login | Session, tech tier, game phase, tick rate and players. Servers with a join password cannot be read yet |
 | ARK: Survival Evolved | Steam A2S on the query port (default 27015) | In-game day, mods, PvE or PvP, cluster, BattlEye |
 | ARK: Survival Ascended | Epic Online Services, found through ARK's official server lists | Official and public servers are found by name. Private servers need RCON (`ListPlayers`) |
-| Valheim, Rust, 7 Days to Die, Palworld, Project Zomboid, Enshrouded, V Rising, Conan Exiles, DayZ, Counter-Strike, Team Fortress 2, Garry's Mod, Unturned | Steam A2S over UDP: server info, player list and rules | The default query port of each game is prefilled. Player names appear where the game reports them, and the raw rules are shown on the server page |
+| Valheim, Rust, 7 Days to Die, Palworld, Project Zomboid, Enshrouded, V Rising, Conan Exiles, DayZ, Counter-Strike, Team Fortress 2, Garry's Mod, Unturned, Left 4 Dead 2, Squad, Insurgency: Sandstorm, Mordhau, Arma Reforger, Soulmask, Abiotic Factor, Space Engineers, The Forest, Sons of the Forest | Steam A2S over UDP: server info, player list and rules | The default query port of each game is prefilled. Player names appear where the game reports them, and the raw rules are shown on the server page |
 | Any other Steam game | Steam A2S | Pick "Steam game (A2S)" and enter the query port |
 
 The port of a server is always the one players connect to. Query and RCON ports only need to be set when they differ from the game's defaults, and the add-server form shows those.

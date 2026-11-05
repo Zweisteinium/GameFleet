@@ -121,7 +121,14 @@
 		</div>
 	</div>
 
-	<div class="grid grid-cols-[1fr_7rem] gap-3">
+	{#if seed?.source === 'docker'}
+		<p class="hint flex items-center gap-2">
+			<Icon name="box" size={14} />
+			Address and ports follow the container <span class="font-mono">{seed.container_name}</span> and are
+			updated on their own.
+		</p>
+	{/if}
+	<div class="grid grid-cols-[1fr_7rem] gap-3" class:hidden={seed?.source === 'docker'}>
 		<div>
 			<label class="label" for="sf-address">Address</label>
 			<input

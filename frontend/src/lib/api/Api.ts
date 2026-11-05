@@ -49,6 +49,16 @@ export enum GameServerType {
   TeamFortress2 = "team_fortress_2",
   GarrysMod = "garrys_mod",
   Unturned = "unturned",
+  Left4Dead2 = "left_4_dead_2",
+  Squad = "squad",
+  InsurgencySandstorm = "insurgency_sandstorm",
+  Mordhau = "mordhau",
+  ArmaReforger = "arma_reforger",
+  Soulmask = "soulmask",
+  AbioticFactor = "abiotic_factor",
+  SpaceEngineers = "space_engineers",
+  TheForest = "the_forest",
+  SonsOfTheForest = "sons_of_the_forest",
   Steam = "steam",
 }
 
