@@ -194,26 +194,21 @@
 	<title>Servers · GameFleet</title>
 </svelte:head>
 
-<div class="space-y-6 pt-6">
+<div class="space-y-5 pt-6">
 	<div class="flex flex-wrap items-end justify-between gap-4">
 		<div>
-			<h1 class="font-display text-3xl font-semibold tracking-tight">Servers</h1>
+			<h1 class="text-2xl font-semibold">Servers</h1>
 			<p class="text-ink-2 mt-1 text-sm">
 				{#if lastRefresh}
-					Live data refreshed at {lastRefresh.toLocaleTimeString()} · auto-refresh every 30s
+					Updated {lastRefresh.toLocaleTimeString()} · refreshes every 30 s
 				{:else}
-					Fetching live data from your servers…
+					Fetching live data…
 				{/if}
 			</p>
 		</div>
 		<div class="flex items-center gap-2">
-			<button
-				class="btn-outline"
-				onclick={refreshLiveInfo}
-				disabled={refreshing}
-				aria-label="Refresh now"
-			>
-				<Icon name="refresh" size={16} class={refreshing ? 'animate-spin' : ''} />
+			<button class="btn-outline" onclick={refreshLiveInfo} disabled={refreshing} aria-label="Refresh now">
+				<Icon name="refresh" size={15} class={refreshing ? 'animate-spin' : ''} />
 				<span class="hidden sm:inline">Refresh</span>
 			</button>
 			{#if admin}
@@ -226,14 +221,14 @@
 							.map((item) => item.container.name)
 							.join(', ')}"
 					>
-						<Icon name="download" size={16} />
+						<Icon name="download" size={15} />
 						<span class="hidden sm:inline"
 							>{importing ? 'Importing…' : `Import from Docker (${importable.length})`}</span
 						>
 					</button>
 				{/if}
 				<button class="btn-primary" onclick={() => (showForm = true)}>
-					<Icon name="plus" size={16} />
+					<Icon name="plus" size={15} />
 					Add server
 				</button>
 			{/if}
@@ -242,44 +237,39 @@
 
 	{#if loading}
 		<div class="py-24">
-			<LoadingSpinner size="lg" message="Loading your fleet…" />
+			<LoadingSpinner size="lg" message="Loading servers…" />
 		</div>
 	{:else if gameServers.length === 0 && discovered.length === 0}
-		<div class="card rise mx-auto max-w-lg px-8 py-16 text-center">
-			<span
-				class="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-accent-soft text-accent"
-			>
-				<Icon name="sparkles" size={26} />
-			</span>
+		<div class="card mx-auto max-w-md px-8 py-14 text-center">
+			<Icon name="server" size={26} class="text-ink-3 mx-auto mb-4" />
 			{#if admin}
-				<h2 class="font-display text-xl font-semibold">Your fleet is empty</h2>
+				<h2 class="text-lg font-semibold">No servers yet</h2>
 				<p class="text-ink-2 mx-auto mt-2 mb-6 max-w-sm text-sm">
-					Add a game server and GameFleet will keep an eye on its status, players and details for
-					you.
+					Add a server to see its status, players and details here. Game servers running in Docker
+					on this host are found on their own.
 				</p>
 				<button class="btn-primary" onclick={() => (showForm = true)}>
-					<Icon name="plus" size={16} />
-					Add your first server
+					<Icon name="plus" size={15} />
+					Add server
 				</button>
 			{:else}
-				<h2 class="font-display text-xl font-semibold">No public servers</h2>
+				<h2 class="text-lg font-semibold">No public servers</h2>
 				<p class="text-ink-2 mx-auto mt-2 max-w-sm text-sm">
-					Nothing is shared publicly yet. Sign in to see and manage the whole fleet.
+					Nothing is shared publicly yet. Sign in to see and manage every server.
 				</p>
 			{/if}
 		</div>
 	{:else}
-		<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-			<StatCard icon="server" title="Servers" value={gameServers.length} size="sm" />
-			<StatCard icon="activity" title="Online" value={onlineCount} tone="success" size="sm" />
+		<div class="card divide-line grid grid-cols-2 divide-y sm:divide-y-0 sm:divide-x lg:grid-cols-4">
+			<StatCard icon="server" title="Servers" value={gameServers.length} />
+			<StatCard icon="activity" title="Online" value={onlineCount} tone="success" />
 			<StatCard
 				icon="wifi-off"
 				title="Offline"
 				value={offlineCount}
 				tone={offlineCount ? 'danger' : 'neutral'}
-				size="sm"
 			/>
-			<StatCard icon="users" title="Players" value={totalPlayers} tone="accent" size="sm" />
+			<StatCard icon="users" title="Players" value={totalPlayers} tone="accent" />
 		</div>
 
 		{#if admin}
@@ -303,7 +293,7 @@
 				{/each}
 			</div>
 		{:else}
-			<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
 				{#each visibleServers as server (server.id)}
 					<ServerCard
 						{server}

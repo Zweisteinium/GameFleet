@@ -2,41 +2,48 @@
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
-/* ---------- Design tokens ---------- */
+/* ---------- Design tokens ----------
+   Neutral greys with one calm accent. Surfaces are flat, separated by hairlines rather than shadows. */
 :root {
 	color-scheme: light;
-	--surface: #f5f6f8;
+	--surface: #f3f4f6;
 	--surface-1: #ffffff;
-	--surface-2: #f0f1f4;
-	--surface-3: #e5e7ec;
-	--ink: #14161c;
-	--ink-2: #4d5363;
-	--ink-3: #7e8497;
-	--line: #e3e5ea;
-	--line-2: #cfd3db;
-	--accent: #5b5bf6;
-	--accent-2: #1fb6d3;
-	--accent-soft: #ecebff;
-	--shadow-card: 0 1px 2px rgb(20 22 28 / 0.04), 0 10px 30px -14px rgb(20 22 28 / 0.18);
-	--shadow-pop: 0 24px 60px -20px rgb(20 22 28 / 0.35);
+	--surface-2: #f4f5f7;
+	--surface-3: #e8eaee;
+	--ink: #16191e;
+	--ink-2: #4e5461;
+	--ink-3: #7b8190;
+	--line: #e3e5e9;
+	--line-2: #cfd3da;
+	--accent: #0f8a80;
+	--accent-ink: #ffffff;
+	--accent-soft: #e2f3f0;
+	--ok: #1f9d55;
+	--warn: #c27a06;
+	--bad: #d2403e;
+	--shadow-card: 0 1px 2px rgb(22 25 30 / 0.05);
+	--shadow-pop: 0 12px 32px -12px rgb(22 25 30 / 0.3);
 }
 
 [data-theme='dark'] {
 	color-scheme: dark;
-	--surface: #0c0e13;
-	--surface-1: #14171f;
-	--surface-2: #1b1f29;
-	--surface-3: #262b37;
-	--ink: #eceef3;
-	--ink-2: #a5abbb;
-	--ink-3: #6e7588;
-	--line: #232835;
-	--line-2: #323848;
-	--accent: #8484ff;
-	--accent-2: #34d0ea;
-	--accent-soft: #23234a;
-	--shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -16px rgb(0 0 0 / 0.6);
-	--shadow-pop: 0 30px 80px -24px rgb(0 0 0 / 0.8);
+	--surface: #0f1114;
+	--surface-1: #16191e;
+	--surface-2: #1c2026;
+	--surface-3: #262b33;
+	--ink: #e9ebef;
+	--ink-2: #a4aab6;
+	--ink-3: #6f7684;
+	--line: #242931;
+	--line-2: #353b46;
+	--accent: #3ec2b3;
+	--accent-ink: #0b1513;
+	--accent-soft: #15302d;
+	--ok: #3fb96f;
+	--warn: #e0a334;
+	--bad: #e5625f;
+	--shadow-card: 0 1px 2px rgb(0 0 0 / 0.35);
+	--shadow-pop: 0 16px 40px -16px rgb(0 0 0 / 0.7);
 }
 
 @theme inline {
@@ -50,12 +57,17 @@
 	--color-line: var(--line);
 	--color-line-2: var(--line-2);
 	--color-accent: var(--accent);
-	--color-accent-2: var(--accent-2);
+	--color-accent-ink: var(--accent-ink);
 	--color-accent-soft: var(--accent-soft);
+	--color-ok: var(--ok);
+	--color-warn: var(--warn);
+	--color-bad: var(--bad);
 	--shadow-card: var(--shadow-card);
 	--shadow-pop: var(--shadow-pop);
 	--font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-	--font-display: 'Sora', 'Inter', ui-sans-serif, system-ui, sans-serif;
+	--font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+	--radius-card: 10px;
+	--radius-control: 7px;
 }
 
 /* ---------- Base ---------- */
@@ -69,7 +81,7 @@
 		@apply bg-surface text-ink;
 	}
 	::selection {
-		background: color-mix(in oklab, var(--accent) 25%, transparent);
+		background: color-mix(in oklab, var(--accent) 22%, transparent);
 	}
 	:focus-visible {
 		outline: 2px solid var(--accent);
@@ -79,31 +91,29 @@
 		scrollbar-width: thin;
 		scrollbar-color: var(--line-2) transparent;
 	}
+	h1,
+	h2,
+	h3 {
+		letter-spacing: -0.01em;
+	}
 }
 
 /* ---------- Reusable components ---------- */
 /* Registered as a utility so component classes below can @apply it (Tailwind v4 cannot @apply plain classes). */
 @utility btn {
-	@apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-all duration-150 select-none disabled:cursor-not-allowed disabled:opacity-50;
+	@apply inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] px-3.5 text-sm font-medium whitespace-nowrap transition-colors duration-100 select-none disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 @layer components {
 	.card {
-		@apply bg-surface-1 border-line rounded-2xl border shadow-card;
+		@apply bg-surface-1 border-line rounded-[var(--radius-card)] border shadow-card;
 	}
 
 	.btn-primary {
-		@apply btn text-white;
-		background: linear-gradient(
-			135deg,
-			var(--accent),
-			color-mix(in oklab, var(--accent) 55%, var(--accent-2))
-		);
-		box-shadow: 0 8px 20px -10px color-mix(in oklab, var(--accent) 70%, transparent);
+		@apply btn bg-accent text-accent-ink;
 	}
 	.btn-primary:hover:not(:disabled) {
-		filter: brightness(1.06);
-		transform: translateY(-1px);
+		filter: brightness(1.08);
 	}
 	.btn-ghost {
 		@apply btn text-ink-2 hover:bg-surface-2 hover:text-ink;
@@ -112,59 +122,100 @@
 		@apply btn text-ink border-line-2 hover:bg-surface-2 border bg-surface-1;
 	}
 	.btn-danger {
-		@apply btn border border-rose-500/30 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400;
+		@apply btn border-line-2 text-bad hover:border-bad/40 border bg-surface-1;
+	}
+	.btn-danger:hover:not(:disabled) {
+		background: color-mix(in oklab, var(--bad) 8%, var(--surface-1));
 	}
 	.btn-icon {
 		@apply h-9 w-9 px-0;
 	}
+	.btn-sm {
+		@apply h-8 px-2.5 text-xs;
+	}
 
 	.input {
-		@apply bg-surface-1 text-ink border-line-2 placeholder:text-ink-3 h-10 w-full rounded-xl border px-3 text-sm transition-colors focus:border-accent focus:outline-none;
+		@apply bg-surface-1 text-ink border-line-2 placeholder:text-ink-3 h-9 w-full rounded-[var(--radius-control)] border px-3 text-sm transition-colors focus:border-accent focus:outline-none;
 	}
 	.label {
-		@apply text-ink-2 mb-1.5 block text-xs font-semibold tracking-wide uppercase;
+		@apply text-ink-2 mb-1.5 block text-xs font-medium;
+	}
+	.hint {
+		@apply text-ink-3 text-xs;
 	}
 
 	.chip {
-		@apply border-line-2 text-ink-2 hover:text-ink hover:border-ink-3 inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors;
+		@apply border-line-2 text-ink-2 hover:text-ink hover:border-ink-3 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors;
 	}
 	.chip-active {
 		@apply border-accent bg-accent-soft text-accent;
 	}
 
+	/* Small inline fact: icon + text. */
 	.meta {
 		@apply text-ink-2 inline-flex items-center gap-1.5 text-xs;
 	}
 
+	/* Status pill, colored with --ok/--warn/--bad/--accent through a `tone-*` class. */
+	.pill {
+		@apply inline-flex h-6 items-center gap-1.5 rounded-full px-2 text-xs font-medium;
+		background: color-mix(in oklab, var(--pill, var(--ink-3)) 12%, transparent);
+		color: var(--pill, var(--ink-2));
+	}
+	.tone-ok {
+		--pill: var(--ok);
+	}
+	.tone-warn {
+		--pill: var(--warn);
+	}
+	.tone-bad {
+		--pill: var(--bad);
+	}
+	.tone-accent {
+		--pill: var(--accent);
+	}
+	.tone-neutral {
+		--pill: var(--ink-3);
+	}
+
+	/* Inline notice: `notice tone-bad` for errors, `tone-warn` for warnings, `tone-ok`, `tone-accent`. */
+	.notice {
+		@apply flex items-start gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm;
+		background: color-mix(in oklab, var(--pill, var(--ink-3)) 10%, transparent);
+		color: var(--pill, var(--ink-2));
+	}
+
 	.segmented {
-		@apply bg-surface-2 inline-flex rounded-xl p-1;
+		@apply bg-surface-2 border-line inline-flex rounded-[var(--radius-control)] border p-0.5;
 	}
 	.segmented > button {
-		@apply text-ink-2 h-8 cursor-pointer rounded-lg px-3 text-xs font-medium transition-colors;
+		@apply text-ink-2 h-7 cursor-pointer rounded-[5px] px-2.5 text-xs font-medium transition-colors;
 	}
 	.segmented > button[aria-pressed='true'] {
-		@apply bg-surface-1 text-ink shadow-sm;
+		@apply bg-surface-1 text-ink shadow-card;
 	}
 
 	.section-title {
-		@apply font-display text-ink flex items-center gap-2 text-base font-semibold;
+		@apply text-ink flex items-center gap-2 text-sm font-semibold;
 	}
-}
-
-/* ---------- Decorative ---------- */
-/* Soft tint behind the header area; fades into the page surface. */
-.page-tint {
-	background: linear-gradient(
-		to bottom,
-		color-mix(in oklab, var(--accent) 7%, var(--surface)),
-		var(--surface)
-	);
+	/* Small uppercase caption above a value. */
+	.caption {
+		@apply text-ink-3 text-[11px] font-medium tracking-wide uppercase;
+	}
+	/* A key/value tile inside a card. */
+	.tile {
+		@apply bg-surface-2 min-w-0 rounded-[var(--radius-control)] px-3 py-2;
+	}
+	/* Thin progress track. */
+	.track {
+		@apply bg-surface-3 relative h-1.5 overflow-hidden rounded-full;
+	}
 }
 
 /* Loading placeholders */
 .skeleton {
 	display: inline-block;
-	border-radius: 0.375rem;
+	border-radius: 4px;
 	background: linear-gradient(
 		90deg,
 		var(--surface-3) 0%,
@@ -184,31 +235,10 @@
 	}
 }
 
-.pulse-ring::after {
-	content: '';
-	position: absolute;
-	inset: -3px;
-	border-radius: 9999px;
-	border: 2px solid currentColor;
-	opacity: 0.6;
-	animation: ring 2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
-}
-
-@keyframes ring {
-	0% {
-		transform: scale(0.7);
-		opacity: 0.7;
-	}
-	100% {
-		transform: scale(1.8);
-		opacity: 0;
-	}
-}
-
 @keyframes rise {
 	from {
 		opacity: 0;
-		transform: translateY(6px);
+		transform: translateY(4px);
 	}
 	to {
 		opacity: 1;
@@ -216,7 +246,7 @@
 	}
 }
 .rise {
-	animation: rise 0.35s ease-out both;
+	animation: rise 0.2s ease-out both;
 }
 
 /* Minecraft MOTD rendering inside cards */

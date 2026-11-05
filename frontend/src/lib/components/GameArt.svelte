@@ -41,7 +41,7 @@
 
 {#if failed}
 	<div
-		class="grid place-items-center font-display font-semibold text-white {className}"
+		class="grid place-items-center font-semibold text-white {className}"
 		style="background: linear-gradient(145deg, hsl({hue} 60% 45%), hsl({(hue + 40) % 360} 65% 30%))"
 		aria-label={label}
 	>
@@ -60,7 +60,7 @@
 		<img
 			src={framedSrc}
 			alt={label}
-			class="image-pixelated absolute top-1/2 left-1/2 w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-md shadow-lg"
+			class="image-pixelated absolute top-1/2 left-1/2 w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-[4px]"
 			onerror={() => (failed = true)}
 		/>
 	</div>

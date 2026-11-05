@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { GameServerPublic, HostStats } from '$lib/api/Api';
-	import { formatBytes, formatUptime, hostStateLabel, hostTone } from '$lib/gameinfo';
+	import { formatBytes, formatUptime, hostStateLabel, hostTone, toneClass } from '$lib/gameinfo';
 	import Icon from './Icon.svelte';
 	import Skeleton from './Skeleton.svelte';
 	import { confirmDialog } from '$lib/confirm.svelte';
@@ -18,19 +18,12 @@
 	let busy = $state<PowerAction | null>(null);
 	let error = $state<string | null>(null);
 
-	const tones = {
-		neutral: 'bg-surface-2 text-ink-2',
-		accent: 'bg-accent-soft text-accent',
-		success: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-		danger: 'bg-rose-500/10 text-rose-700 dark:text-rose-400',
-		warning: 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-	};
 	const bars = {
 		neutral: 'bg-ink-3',
 		accent: 'bg-accent',
-		success: 'bg-emerald-500',
-		danger: 'bg-rose-500',
-		warning: 'bg-amber-500'
+		success: 'bg-ok',
+		danger: 'bg-bad',
+		warning: 'bg-warn'
 	};
 
 	const running = $derived(stats?.state === 'running');
@@ -128,7 +121,7 @@
 
 {#snippet usageBar(usage: Usage, tone: keyof typeof bars)}
 	<!-- Solid: this server. Faded: everything running on the host. Tick: the container's limit. -->
-	<div class="bg-surface-3 relative mt-1.5 h-1.5 overflow-hidden rounded-full">
+	<div class="track mt-1.5">
 		{#if usage.total != null}
 			<div
 				class="absolute inset-y-0 left-0 rounded-full opacity-25 transition-all duration-500 {bars[tone]}"
@@ -140,7 +133,7 @@
 			style="width: {usage.own > 0 ? Math.max(usage.own * 100, 1) : 0}%"
 		></div>
 		{#if usage.limit != null}
-			<div class="bg-ink-2 absolute inset-y-0 w-0.5" style="left: calc({usage.limit * 100}% - 1px)"></div>
+			<div class="bg-ink-3 absolute inset-y-0 w-0.5" style="left: calc({usage.limit * 100}% - 1px)"></div>
 		{/if}
 	</div>
 {/snippet}
@@ -149,15 +142,11 @@
 	<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 		<h3 class="section-title">
 			<Icon name="box" size={16} class="text-ink-3" />Host container
-			<span class="text-ink-3 font-mono text-sm font-normal">{server.container_name}</span>
+			<span class="text-ink-3 font-mono text-xs font-normal">{server.container_name}</span>
 		</h3>
 		<div class="flex items-center gap-2">
 			{#if stats}
-				<span
-					class="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium {tones[
-						hostTone(stats.state)
-					]}"
-				>
+				<span class="pill {toneClass(hostTone(stats.state))} h-7 px-2.5">
 					<span class="h-1.5 w-1.5 rounded-full bg-current"></span>{hostStateLabel(stats)}
 				</span>
 			{:else}
@@ -166,7 +155,7 @@
 			{#if stats && stats.state !== 'missing'}
 				{#if running}
 					<button
-						class="btn-outline h-8 px-3 text-xs"
+						class="btn-outline btn-sm"
 						onclick={() => run('restart')}
 						disabled={busy !== null}
 					>
@@ -174,7 +163,7 @@
 						{busy === 'restart' ? 'Restarting…' : 'Restart'}
 					</button>
 					<button
-						class="btn-danger h-8 px-3 text-xs"
+						class="btn-danger btn-sm"
 						onclick={() => run('stop')}
 						disabled={busy !== null}
 					>
@@ -182,7 +171,7 @@
 					</button>
 				{:else}
 					<button
-						class="btn-primary h-8 px-3 text-xs"
+						class="btn-primary btn-sm"
 						onclick={() => run('start')}
 						disabled={busy !== null}
 					>
@@ -194,11 +183,7 @@
 	</div>
 
 	{#if error}
-		<p
-			class="mb-4 flex items-center gap-2 rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-400"
-		>
-			<Icon name="alert" size={16} />{error}
-		</p>
+		<p class="notice tone-bad mb-4"><Icon name="alert" size={16} class="mt-0.5 shrink-0" />{error}</p>
 	{/if}
 
 	{#if stats?.error && stats.state === 'missing'}
@@ -209,17 +194,17 @@
 	{:else}
 		<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
 			<!-- CPU -->
-			<div class="bg-surface-2 rounded-xl px-3 py-2.5" title={cpuTitle}>
-				<p class="text-ink-3 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase">
+			<div class="tile" title={cpuTitle}>
+				<p class="caption flex items-center gap-1.5">
 					<Icon name="cpu" size={12} />CPU
 				</p>
 				{#if !stats}
 					<Skeleton class="mt-1.5 h-5 w-16" />
 				{:else}
-					<p class="font-display mt-0.5 text-lg font-semibold tabular-nums">
+					<p class="mt-0.5 text-lg font-semibold tabular-nums">
 						{#if stats.cpu_share != null}
 							{stats.cpu_share.toFixed(1)}%
-							{#if cpuScope}<span class="text-ink-3 font-sans text-xs font-normal">{cpuScope}</span>{/if}
+							{#if cpuScope}<span class="text-ink-3 text-xs font-normal">{cpuScope}</span>{/if}
 						{:else if running}
 							<span class="text-ink-3 text-sm font-normal">measuring…</span>
 						{:else}
@@ -230,17 +215,17 @@
 				{/if}
 			</div>
 			<!-- Memory -->
-			<div class="bg-surface-2 rounded-xl px-3 py-2.5" title={memTitle}>
-				<p class="text-ink-3 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase">
+			<div class="tile" title={memTitle}>
+				<p class="caption flex items-center gap-1.5">
 					<Icon name="memory" size={12} />Memory
 				</p>
 				{#if !stats}
 					<Skeleton class="mt-1.5 h-5 w-24" />
 				{:else}
-					<p class="font-display mt-0.5 text-lg font-semibold tabular-nums">
+					<p class="mt-0.5 text-lg font-semibold tabular-nums">
 						{#if stats.memory_used != null}
 							{formatBytes(stats.memory_used)}
-							{#if stats.memory_limit}<span class="text-ink-3 font-sans text-xs font-normal"
+							{#if stats.memory_limit}<span class="text-ink-3 text-xs font-normal"
 									>of {formatBytes(stats.memory_limit)}</span
 								>{/if}
 						{:else}
@@ -251,14 +236,14 @@
 				{/if}
 			</div>
 			<!-- Storage -->
-			<div class="bg-surface-2 rounded-xl px-3 py-2.5">
-				<p class="text-ink-3 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase">
+			<div class="tile">
+				<p class="caption flex items-center gap-1.5">
 					<Icon name="hard-drive" size={12} />Data
 				</p>
 				{#if !stats}
 					<Skeleton class="mt-1.5 h-5 w-20" />
 				{:else}
-					<p class="font-display mt-0.5 text-lg font-semibold tabular-nums">
+					<p class="mt-0.5 text-lg font-semibold tabular-nums">
 						{formatBytes(stats.data_size) ?? '—'}
 					</p>
 					<p class="text-ink-3 truncate text-xs" title={server.data_path ?? ''}>
@@ -273,14 +258,14 @@
 				{/if}
 			</div>
 			<!-- Uptime -->
-			<div class="bg-surface-2 rounded-xl px-3 py-2.5">
-				<p class="text-ink-3 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase">
+			<div class="tile">
+				<p class="caption flex items-center gap-1.5">
 					<Icon name="clock" size={12} />Uptime
 				</p>
 				{#if !stats}
 					<Skeleton class="mt-1.5 h-5 w-16" />
 				{:else}
-					<p class="font-display mt-0.5 text-lg font-semibold tabular-nums">
+					<p class="mt-0.5 text-lg font-semibold tabular-nums">
 						{formatUptime(stats.started_at) ?? '—'}
 					</p>
 					<p class="text-ink-3 truncate text-xs">{stats.status}</p>

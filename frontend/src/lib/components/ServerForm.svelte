@@ -168,7 +168,7 @@
 	{/if}
 
 	{#if showRcon}
-		<div class="bg-surface-2 space-y-3 rounded-xl p-3">
+		<div class="bg-surface-2 space-y-3 rounded-[var(--radius-control)] p-3">
 			<div class="grid grid-cols-[7rem_1fr] gap-3">
 				<div>
 					<label class="label" for="sf-rport">RCON port</label>
@@ -214,7 +214,7 @@
 		<div class="grid gap-3 sm:grid-cols-2">
 			<div>
 				<label class="label" for="sf-pack"
-					>Modpack <span class="text-ink-3 normal-case">· optional</span></label
+					>Modpack <span class="text-ink-3">· optional</span></label
 				>
 				<input
 					id="sf-pack"
@@ -227,7 +227,7 @@
 			</div>
 			<div>
 				<label class="label" for="sf-pack-url"
-					>Modpack link <span class="text-ink-3 normal-case">· optional</span></label
+					>Modpack link <span class="text-ink-3">· optional</span></label
 				>
 				<input
 					id="sf-pack-url"
@@ -261,11 +261,7 @@
 	</label>
 
 	{#if error}
-		<p
-			class="flex items-center gap-2 rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-400"
-		>
-			<Icon name="alert" size={16} />{error}
-		</p>
+		<p class="notice tone-bad"><Icon name="alert" size={16} class="mt-0.5 shrink-0" />{error}</p>
 	{/if}
 
 	<div class="flex justify-end gap-2 pt-2">

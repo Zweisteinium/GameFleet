@@ -19,7 +19,6 @@
 	let { server, running, onChanged }: Props = $props();
 
 	const POLL_MS = 2000;
-	const SHOWN = 8;
 	const PHASES: Record<BackupJob['phase'], string> = {
 		preparing: 'Copying and checking the backup…',
 		stopping: 'Stopping the server…',
@@ -38,13 +37,22 @@
 	let pending = $state<{ file?: File; backup?: Backup } | null>(null);
 	let keepCopy = $state(true);
 	let matchConfirmed = $state(false);
-	let showAll = $state(false);
 	let uploadProgress = $state<number | null>(null);
 	let poll: ReturnType<typeof setTimeout> | undefined;
 
 	const job = $derived(info?.job ?? null);
 	const backups = $derived(info?.backups ?? []);
-	const shown = $derived(showAll ? backups : backups.slice(0, SHOWN));
+	/** Backups grouped by the folder they live in, GameFleet's own copies last. */
+	const groups = $derived.by(() => {
+		const byFolder: Record<string, Backup[]> = {};
+		for (const b of backups) {
+			const key = b.gamefleet ? 'Copies kept before a restore' : b.folder;
+			(byFolder[key] ??= []).push(b);
+		}
+		return Object.entries(byFolder).sort(
+			([a], [b]) => Number(a.startsWith('Copies')) - Number(b.startsWith('Copies'))
+		);
+	});
 	const busy = $derived((job != null && job.finished_at == null) || uploadProgress != null);
 	const modpack = $derived(
 		server.modpack_name
@@ -188,11 +196,11 @@
 		<h3 class="section-title">
 			<Icon name="archive" size={16} class="text-ink-3" />Backups
 			{#if info?.supported}
-				<span class="text-ink-3 font-sans text-sm font-normal">({backups.length})</span>
+				<span class="text-ink-3 text-sm font-normal">({backups.length})</span>
 			{/if}
 		</h3>
 		{#if info?.supported}
-			<button class="btn-outline h-8 px-3 text-xs" onclick={() => fileInput?.click()} disabled={busy}>
+			<button class="btn-outline btn-sm" onclick={() => fileInput?.click()} disabled={busy}>
 				<Icon name="upload" size={14} />Restore from file
 			</button>
 			<input
@@ -206,11 +214,7 @@
 	</div>
 
 	{#if loadError}
-		<p
-			class="mb-4 flex items-center gap-2 rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-400"
-		>
-			<Icon name="alert" size={16} />{loadError}
-		</p>
+		<p class="notice tone-bad mb-4"><Icon name="alert" size={16} class="mt-0.5 shrink-0" />{loadError}</p>
 	{/if}
 
 	{#if !info}
@@ -222,11 +226,11 @@
 	{:else}
 		{#if job}
 			<div
-				class="mb-4 flex items-start gap-3 rounded-xl px-3 py-2.5 text-sm {job.phase === 'failed'
-					? 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
+				class="notice mb-4 {job.phase === 'failed'
+					? 'tone-bad'
 					: job.phase === 'done'
-						? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-						: 'bg-accent-soft text-accent'}"
+						? 'tone-ok'
+						: 'tone-accent'}"
 			>
 				{#if job.finished_at == null}
 					<Icon name="refresh" size={16} class="mt-0.5 animate-spin" />
@@ -255,51 +259,52 @@
 		{/if}
 
 		{#if backups.length === 0}
-			<p class="text-ink-3 py-4 text-center text-sm">
+			<p class="hint py-4 text-center">
 				No backups found. The server's own backups are listed here once it has written some.
 			</p>
 		{:else}
-			<ul class="space-y-1.5">
-				{#each shown as backup (backup.path)}
-					<li class="bg-surface-2 flex items-center gap-3 rounded-xl px-3 py-2">
-						<Icon name="hard-drive" size={16} class="text-ink-3 shrink-0" />
-						<div class="min-w-0 flex-1">
-							<p class="truncate font-mono text-sm" title={backup.path}>{backup.file}</p>
-							<p class="text-ink-3 text-xs">
-								{when(backup.created)} · {formatBytes(backup.size)} ·
-								{#if backup.gamefleet}copy kept before a restore{:else}<span class="font-mono"
-										>{backup.folder}</span
-									>{/if}
-							</p>
-						</div>
-						<button
-							class="btn-outline h-8 px-2.5 text-xs"
-							title="Restore this backup"
-							disabled={busy}
-							onclick={() => open({ backup })}
-						>
-							<Icon name="history" size={14} />Restore
-						</button>
-						<a
-							class="btn-ghost btn-icon h-8 w-8"
-							href={downloadUrl(backup)}
-							download={backup.file}
-							rel="external"
-							title="Download"
-							aria-label="Download {backup.file}"><Icon name="download" size={15} /></a
-						>
-					</li>
+			<div class="space-y-4">
+				{#each groups as [folder, items] (folder)}
+					<div>
+						<p class="caption mb-1.5 flex items-center gap-1.5">
+							<Icon name="folder" size={12} />
+							{#if folder.startsWith('Copies')}{folder}{:else}<span class="font-mono normal-case"
+									>{folder}</span
+								>{/if}
+							<span class="text-ink-3 font-normal">({items.length})</span>
+						</p>
+						<ul class="divide-line border-line divide-y rounded-[var(--radius-control)] border">
+							{#each items as backup (backup.path)}
+								<li class="flex items-center gap-3 px-3 py-2">
+									<div class="min-w-0 flex-1">
+										<p class="truncate font-mono text-sm" title={backup.path}>{backup.file}</p>
+										<p class="hint">{when(backup.created)} · {formatBytes(backup.size)}</p>
+									</div>
+									<button
+										class="btn-outline btn-sm"
+										title="Restore this backup"
+										disabled={busy}
+										onclick={() => open({ backup })}
+									>
+										<Icon name="history" size={14} />Restore
+									</button>
+									<a
+										class="btn-ghost btn-icon h-8 w-8"
+										href={downloadUrl(backup)}
+										download={backup.file}
+										rel="external"
+										title="Download"
+										aria-label="Download {backup.file}"><Icon name="download" size={15} /></a
+									>
+								</li>
+							{/each}
+						</ul>
+					</div>
 				{/each}
-			</ul>
-			{#if backups.length > SHOWN}
-				<button class="btn-ghost mt-2 h-8 px-3 text-xs" onclick={() => (showAll = !showAll)}>
-					<Icon name="chevron-down" size={14} class={showAll ? 'rotate-180' : ''} />
-					{showAll ? 'Show fewer' : `Show all ${backups.length}`}
-				</button>
-			{/if}
+			</div>
 		{/if}
 		{#if info.locations?.length}
-			<p class="text-ink-3 mt-3 text-xs">
+			<p class="hint mt-3">
 				Searched <span class="font-mono">{info.locations.join(', ')}</span> in the container.
 			</p>
 		{/if}
@@ -309,7 +314,7 @@
 {#if pending && info}
 	<Modal title="Restore backup" onClose={() => uploadProgress == null && (pending = null)}>
 		<div class="space-y-4 text-sm">
-			<div class="bg-surface-2 flex items-center gap-3 rounded-xl px-3 py-2.5">
+			<div class="tile flex items-center gap-3 py-2.5">
 				<Icon name={pending.file ? 'upload' : 'history'} size={18} class="text-ink-3 shrink-0" />
 				<div class="min-w-0">
 					<p class="truncate font-mono">{pending.file?.name ?? pending.backup?.file}</p>
@@ -325,7 +330,7 @@
 			</div>
 
 			{#if pending.file}
-				<div class="rounded-xl bg-amber-500/10 px-3 py-2.5 text-amber-800 dark:text-amber-300">
+				<div class="notice tone-warn block py-2.5">
 					<p class="flex items-center gap-2 font-medium">
 						<Icon name="alert" size={16} />Make sure this backup fits the server
 					</p>
@@ -336,9 +341,9 @@
 						fail to load, or be damaged for good when the server opens it.
 					</p>
 				</div>
-				<p class="text-ink-2 text-xs">{info.hint}</p>
+				<p class="hint">{info.hint}</p>
 			{:else}
-				<p class="text-ink-2 text-xs">
+				<p class="hint">
 					A backup made before a game or modpack update may not load on the version the server runs
 					now.
 				</p>
@@ -385,20 +390,13 @@
 			{#if uploadProgress != null}
 				<div>
 					<p class="text-ink-2 mb-1 text-xs">Uploading… {Math.round(uploadProgress * 100)}%</p>
-					<div class="bg-surface-3 h-1.5 overflow-hidden rounded-full">
-						<div
-							class="h-full rounded-full bg-accent transition-all"
-							style="width: {uploadProgress * 100}%"
-						></div>
+					<div class="track">
+						<div class="h-full rounded-full bg-accent transition-all" style="width: {uploadProgress * 100}%"></div>
 					</div>
 				</div>
 			{/if}
 			{#if error}
-				<p
-					class="flex items-center gap-2 rounded-xl bg-rose-500/10 px-3 py-2 text-rose-700 dark:text-rose-400"
-				>
-					<Icon name="alert" size={16} />{error}
-				</p>
+				<p class="notice tone-bad"><Icon name="alert" size={16} class="mt-0.5 shrink-0" />{error}</p>
 			{/if}
 			<div class="flex justify-end gap-2 pt-1">
 				<button

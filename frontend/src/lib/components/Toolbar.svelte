@@ -48,18 +48,18 @@
 	}
 </script>
 
-<div class="card p-3 sm:p-4">
-	<div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+<div class="space-y-3">
+	<div class="flex flex-col gap-2 lg:flex-row lg:items-center">
 		<label class="relative flex-1">
 			<Icon
 				name="search"
-				size={16}
+				size={15}
 				class="text-ink-3 pointer-events-none absolute top-1/2 left-3 -translate-y-1/2"
 			/>
 			<input
 				class="input pl-9"
 				type="search"
-				placeholder="Search by name, address or map"
+				placeholder="Search name, address or map"
 				bind:value={state.search}
 			/>
 		</label>
@@ -76,7 +76,7 @@
 		<div class="flex items-center gap-2">
 			<label class="relative">
 				<span class="sr-only">Sort by</span>
-				<select class="input h-9 w-36 appearance-none pr-8 text-xs" bind:value={state.sortBy}>
+				<select class="input w-36 appearance-none pr-8 text-xs" bind:value={state.sortBy}>
 					{#each sortOptions as option (option.key)}
 						<option value={option.key}>Sort: {option.label}</option>
 					{/each}
@@ -93,30 +93,26 @@
 				aria-label="Toggle sort direction"
 				title={state.sortDir === 'asc' ? 'Ascending' : 'Descending'}
 			>
-				<Icon
-					name="arrow-up-down"
-					size={16}
-					class={state.sortDir === 'desc' ? 'scale-y-[-1]' : ''}
-				/>
+				<Icon name="arrow-up-down" size={15} class={state.sortDir === 'desc' ? 'scale-y-[-1]' : ''} />
 			</button>
 
 			<div class="segmented" role="group" aria-label="View">
 				<button
 					aria-pressed={state.view === 'grid'}
 					onclick={() => (state.view = 'grid')}
-					aria-label="Grid view"><Icon name="grid" size={15} /></button
+					aria-label="Grid view"><Icon name="grid" size={14} /></button
 				>
 				<button
 					aria-pressed={state.view === 'list'}
 					onclick={() => (state.view = 'list')}
-					aria-label="List view"><Icon name="list" size={15} /></button
+					aria-label="List view"><Icon name="list" size={14} /></button
 				>
 			</div>
 		</div>
 	</div>
 
 	{#if availableGames.length > 1 || hasFilters}
-		<div class="mt-3 flex flex-wrap items-center gap-2">
+		<div class="flex flex-wrap items-center gap-1.5">
 			{#each availableGames as game (game)}
 				<button
 					class="chip {state.games.includes(game) ? 'chip-active' : ''}"
@@ -125,7 +121,7 @@
 					{gameLabel(game)}
 				</button>
 			{/each}
-			<span class="text-ink-3 ml-auto text-xs tabular-nums">
+			<span class="hint ml-auto tabular-nums">
 				{resultCount}
 				{resultCount === 1 ? 'server' : 'servers'}
 				{#if hasFilters}

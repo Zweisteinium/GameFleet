@@ -8,6 +8,22 @@ import type { LiveServerInfo } from '$lib/api/types';
 
 export type Tone = 'neutral' | 'accent' | 'success' | 'danger' | 'warning';
 
+/** CSS class that colors a `.pill`, `.notice` or bar with the tone (see app.css). */
+export function toneClass(tone: Tone | undefined): string {
+	switch (tone) {
+		case 'success':
+			return 'tone-ok';
+		case 'danger':
+			return 'tone-bad';
+		case 'warning':
+			return 'tone-warn';
+		case 'accent':
+			return 'tone-accent';
+		default:
+			return 'tone-neutral';
+	}
+}
+
 export interface Property {
 	key: string;
 	icon: string;

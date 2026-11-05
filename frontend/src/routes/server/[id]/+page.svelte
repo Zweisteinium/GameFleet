@@ -154,8 +154,8 @@
 </svelte:head>
 
 <div class="pt-4">
-	<a href={resolve('/main')} class="btn-ghost -ml-3 h-9 px-3 text-sm">
-		<Icon name="arrow-left" size={16} />
+	<a href={resolve('/main')} class="btn-ghost -ml-2.5 h-8 px-2.5 text-sm">
+		<Icon name="arrow-left" size={15} />
 		All servers
 	</a>
 </div>
@@ -164,12 +164,8 @@
 	<div class="py-24"><LoadingSpinner size="lg" message="Loading server…" /></div>
 {:else if error && !server}
 	<div class="card mx-auto mt-6 max-w-md px-8 py-14 text-center">
-		<span
-			class="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-rose-500/10 text-rose-500"
-		>
-			<Icon name="alert" size={22} />
-		</span>
-		<h2 class="font-display text-lg font-semibold">Something went wrong</h2>
+		<Icon name="alert" size={24} class="text-bad mx-auto mb-4" />
+		<h2 class="text-lg font-semibold">Something went wrong</h2>
 		<p class="text-ink-2 mt-1 mb-6 text-sm">{error}</p>
 		<a href={resolve('/main')} class="btn-primary">Back to dashboard</a>
 	</div>
@@ -199,19 +195,18 @@
 					<GameArt
 						game={server.game}
 						serverIcon={liveInfo?.icon}
-						class="h-36 w-24 shrink-0 rounded-xl shadow-pop"
+						class="h-32 w-[5.4rem] shrink-0 rounded-[8px] shadow-card"
 					/>
 					<div class="min-w-0 pb-1">
-						<p class="text-ink-2 flex items-center gap-2 text-xs font-semibold tracking-wide uppercase">
+						<p class="caption flex items-center gap-2">
 							{gameLabel(server.game)}
 							{#if isLocal}
-								<span
-									class="bg-surface-2 text-ink-2 inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[10px] font-medium normal-case"
+								<span class="pill tone-neutral h-5 px-1.5 text-[11px] normal-case"
 									><Icon name="box" size={11} />Docker</span
 								>
 							{/if}
 						</p>
-						<h1 class="font-display mt-1 text-3xl font-semibold tracking-tight">{server.name}</h1>
+						<h1 class="mt-1 text-2xl font-semibold">{server.name}</h1>
 						{#if !liveInfo}
 							<Skeleton class="mt-2 h-4 w-56" />
 						{:else if liveInfo.server_name && liveInfo.server_name !== server.name}
@@ -231,7 +226,7 @@
 						{#if server.modpack_name}
 							<div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
 								{#if server.modpack_icon}
-									<img src={server.modpack_icon} alt="" class="h-6 w-6 rounded-md" loading="lazy" />
+									<img src={server.modpack_icon} alt="" class="h-6 w-6 rounded-[5px]" loading="lazy" />
 								{:else}
 									<Icon name="puzzle" size={16} class="text-ink-3" />
 								{/if}
@@ -269,14 +264,14 @@
 						<Skeleton class="h-8 w-24 rounded-full" />
 					{/if}
 					<div class="flex gap-2">
-						<button class="btn-outline h-9" onclick={refreshLiveInfo} disabled={refreshing}>
+						<button class="btn-outline" onclick={refreshLiveInfo} disabled={refreshing}>
 							<Icon name="refresh" size={15} class={refreshing ? 'animate-spin' : ''} />Refresh
 						</button>
 						{#if loggedIn()}
-							<button class="btn-outline h-9" onclick={() => (editing = true)}
+							<button class="btn-outline" onclick={() => (editing = true)}
 								><Icon name="pencil" size={15} />Edit</button
 							>
-							<button class="btn-danger h-9" onclick={deleteServer}
+							<button class="btn-danger" onclick={deleteServer}
 								><Icon name="trash" size={15} />Remove</button
 							>
 						{/if}
@@ -286,11 +281,7 @@
 		</section>
 
 		{#if error}
-			<p
-				class="flex items-center gap-2 rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-400"
-			>
-				<Icon name="alert" size={16} />{error}
-			</p>
+			<p class="notice tone-bad"><Icon name="alert" size={16} class="mt-0.5 shrink-0" />{error}</p>
 		{/if}
 
 		{#if isLocal}
@@ -305,7 +296,7 @@
 			<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
 				{#each [0, 1, 2, 3] as i (i)}
 					<div class="card flex items-center gap-3 p-4">
-						<Skeleton class="h-10 w-10 rounded-xl" />
+						<Skeleton class="h-9 w-9 rounded-[7px]" />
 						<div class="flex-1 space-y-2">
 							<Skeleton class="h-3 w-16" /><Skeleton class="h-5 w-24" />
 						</div>
@@ -314,42 +305,36 @@
 			</div>
 			<div class="grid gap-5 lg:grid-cols-5">
 				<div class="card space-y-3 p-5 lg:col-span-3">
-					<Skeleton class="h-5 w-40" /><Skeleton class="h-3 w-24" /><Skeleton
-						class="h-12 w-full rounded-xl"
-					/>
+					<Skeleton class="h-5 w-40" /><Skeleton class="h-3 w-24" /><Skeleton class="h-12 w-full" />
 				</div>
 				<div class="card space-y-3 p-5 lg:col-span-2">
-					<Skeleton class="h-5 w-32" /><Skeleton class="h-9 w-full rounded-xl" /><Skeleton
-						class="h-9 w-full rounded-xl"
-					/>
+					<Skeleton class="h-5 w-32" /><Skeleton class="h-9 w-full" /><Skeleton class="h-9 w-full" />
 				</div>
 			</div>
 		{:else}
 			{#if liveInfo.error_message}
-				<div
-					class="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300"
-				>
-					<Icon name="alert" size={18} class="mt-0.5" />
+				<div class="notice tone-warn py-2.5">
+					<Icon name="alert" size={16} class="mt-0.5 shrink-0" />
 					<div>
-						<p class="font-semibold">Could not read live data</p>
-						<p class="mt-0.5 opacity-90">{liveInfo.error_message}</p>
+						<p class="font-medium">Could not read live data</p>
+						<p class="mt-0.5 text-xs">{liveInfo.error_message}</p>
 					</div>
 				</div>
 			{/if}
 
 			<!-- Overview: player count plus three headline tiles chosen per game -->
-			<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-				<div class="card flex items-center gap-3 p-4">
+			<div class="card divide-line grid grid-cols-2 divide-y sm:divide-y-0 sm:divide-x md:grid-cols-4">
+				<div class="flex items-center gap-3 px-4 py-3">
 					<span
-						class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent"
-						><Icon name="users" size={18} /></span
+						class="pill tone-accent grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-control)] px-0"
+						><Icon name="users" size={17} /></span
 					>
 					<div class="min-w-0 flex-1">
-						<p class="text-ink-3 text-[11px] font-semibold tracking-wide uppercase">Players</p>
+						<p class="caption">Players</p>
 						{#if liveInfo.players_online != null}
 							<PlayersBar online={liveInfo.players_online} max={liveInfo.players_max} />
 						{:else}
-							<p class="font-display text-xl font-semibold">—</p>
+							<p class="text-lg font-semibold">—</p>
 						{/if}
 					</div>
 				</div>
@@ -374,7 +359,7 @@
 						{#if liveInfo.description}
 							<div>
 								<dt class="label">Description</dt>
-								<dd class="bg-surface-2 rounded-xl px-3 py-2 text-sm">
+								<dd class="tile text-sm">
 									{#if isMinecraft(server.game)}
 										<MinecraftMOTD motd={liveInfo.description} />
 									{:else}
@@ -404,14 +389,14 @@
 					<h3 class="section-title mb-4">
 						<Icon name="users" size={16} class="text-ink-3" />
 						Players online
-						{#if liveInfo.player_list?.length}<span class="text-ink-3 font-sans text-sm font-normal"
+						{#if liveInfo.player_list?.length}<span class="text-ink-3 text-sm font-normal"
 								>({liveInfo.player_list.length})</span
 							>{/if}
 					</h3>
 					{#if liveInfo.player_list && liveInfo.player_list.length > 0}
 						<ul class="max-h-80 space-y-1.5 overflow-y-auto pr-1">
 							{#each liveInfo.player_list as player, index (index)}
-								<li class="bg-surface-2 flex items-center gap-3 rounded-xl px-3 py-2">
+								<li class="tile flex items-center gap-3">
 									<span
 										class="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent"
 									>
@@ -433,11 +418,11 @@
 				<section class="card p-5">
 					<h3 class="section-title mb-4">
 						<Icon name="layers" size={16} class="text-ink-3" />Mods
-						<span class="text-ink-3 font-sans text-sm font-normal">({liveInfo.mods.length})</span>
+						<span class="text-ink-3 text-sm font-normal">({liveInfo.mods.length})</span>
 					</h3>
 					<ul class="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
 						{#each liveInfo.mods as mod, index (index)}
-							<li class="bg-surface-2 min-w-0 rounded-xl px-3 py-2">
+							<li class="tile">
 								{#if mod.url}
 									<a
 										href={mod.url}
@@ -456,7 +441,7 @@
 										{mod.name || (mod.id ? `Mod ${mod.id}` : 'Unknown mod')}
 									</p>
 								{/if}
-								{#if mod.version}<p class="text-ink-3 text-xs">v{mod.version}</p>{/if}
+								{#if mod.version}<p class="hint">v{mod.version}</p>{/if}
 							</li>
 						{/each}
 					</ul>
