@@ -6,9 +6,22 @@ export const BACKEND_PATHS = ['/api/', '/swagger', '/openapi.json'];
 
 const BACKEND_URL = (env.BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
 
+// Sent with every page and proxied response: no framing, no MIME sniffing, no referrer leakage.
+const SECURITY_HEADERS: Record<string, string> = {
+	'X-Content-Type-Options': 'nosniff',
+	'X-Frame-Options': 'DENY',
+	'Referrer-Policy': 'same-origin',
+	'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+};
+
+function secured(response: Response): Response {
+	for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.headers.set(name, value);
+	return response;
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname, search } = event.url;
-	if (!BACKEND_PATHS.some((p) => pathname === p || pathname.startsWith(p))) return resolve(event);
+	if (!BACKEND_PATHS.some((p) => pathname === p || pathname.startsWith(p))) return secured(await resolve(event));
 
 	const headers = new Headers(event.request.headers);
 	// Hop-by-hop headers belong to the incoming connection; Node's fetch refuses some of them
@@ -36,5 +49,5 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const out = new Headers(response.headers);
 	out.delete('content-encoding');
 	out.delete('content-length');
-	return new Response(response.body, { status: response.status, headers: out });
+	return secured(new Response(response.body, { status: response.status, headers: out }));
 };

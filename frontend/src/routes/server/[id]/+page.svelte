@@ -110,8 +110,12 @@
 			).data;
 			for (const holder of holders) if (holder.server_id) refreshServer(holder.server_id);
 		}
-		// Give the game a moment to come up, then re-query it.
-		setTimeout(() => refreshServer(serverId), 3000);
+		settle();
+	}
+
+	/** Re-query a few times after the container changed: games need a while to come up or go down. */
+	function settle() {
+		for (const delay of [3000, 10000, 25000]) setTimeout(() => refreshServer(serverId), delay);
 	}
 
 	async function deleteServer() {
@@ -287,7 +291,14 @@
 		{#if isLocal}
 			<HostPanel {server} stats={hostStats} onPower={power} />
 			{#if loggedIn()}
-				<BackupPanel {server} running={hostStats?.state === 'running'} onChanged={refreshLiveInfo} />
+				<BackupPanel
+					{server}
+					running={hostStats?.state === 'running'}
+					onChanged={() => {
+						refreshLiveInfo();
+						settle();
+					}}
+				/>
 			{/if}
 		{/if}
 

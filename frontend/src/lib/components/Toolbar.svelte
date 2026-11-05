@@ -46,7 +46,19 @@
 		state.games = [];
 		state.status = 'all';
 	}
+
+	let searchInput: HTMLInputElement | undefined;
+	// "/" jumps to the search box, as long as nothing else has the keyboard.
+	function onKeydown(e: KeyboardEvent) {
+		const target = e.target as HTMLElement | null;
+		if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '')) {
+			e.preventDefault();
+			searchInput?.focus();
+		}
+	}
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <div class="space-y-3">
 	<div class="flex flex-col gap-2 lg:flex-row lg:items-center">
@@ -61,6 +73,7 @@
 				type="search"
 				placeholder="Search name, address or map"
 				bind:value={state.search}
+				bind:this={searchInput}
 			/>
 		</label>
 
