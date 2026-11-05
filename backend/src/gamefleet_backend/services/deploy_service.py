@@ -363,7 +363,7 @@ class DeployService:
         with tarfile.open(fileobj=buf, mode="w") as tar:
             info = tarfile.TarInfo("docker-compose.yml")
             payload = compose.encode()
-            info.size, info.mtime, info.mode = len(payload), int(time.time()), 0o644
+            info.size, info.mtime, info.mode = len(payload), int(time.time()), 0o600  # holds the RCON password
             tar.addfile(info, io.BytesIO(payload))
         await docker_service.remove_container(helper)
         await docker_service.create_container(

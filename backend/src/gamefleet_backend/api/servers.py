@@ -220,16 +220,26 @@ async def update_server(
 @router.delete('/{server_id}', operation_id="deleteServer", dependencies=LOGIN)
 async def delete_server(
     server_id: str,
+    remove_container: bool = Query(False, description="Also stop and remove the Docker container; its data stays"),
     service: GameServerService = Depends(get_game_server_service),
     discovery: DockerDiscoveryService = Depends(get_docker_discovery_service),
 ):
-    """Delete a game server. A Docker-linked server's container is hidden from discovery afterwards."""
+    """Delete a game server. A Docker-linked server's container is hidden from discovery afterwards, or removed
+    when asked to (the data directory and volumes are never touched)."""
     server = await service.get_server_by_id(server_id)
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     if server.source == "docker" and server.container_name:
-        # Otherwise discovery would offer (or re-import) the container right away.
-        await discovery.set_ignored(server.container_name, True)
+        if remove_container:
+            try:
+                await docker_service.remove_container(server.container_name)
+            except DockerUnavailable as exc:
+                raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
+            except docker.errors.APIError as exc:
+                raise HTTPException(status_code=502, detail=f"Docker refused the request: {exc.explanation or exc}")
+        else:
+            # Otherwise discovery would offer (or re-import) the container right away.
+            await discovery.set_ignored(server.container_name, True)
         docker_service.forget(server.container_name)
     await service.delete_server(server_id)
     return {"message": "Server deleted successfully"}

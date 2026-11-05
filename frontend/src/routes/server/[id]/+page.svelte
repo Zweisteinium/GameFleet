@@ -124,13 +124,23 @@
 		const remove = await confirmDialog({
 			title: 'Remove server',
 			message: `Remove "${server.name}" from GameFleet?`,
-			note: isLocal ? 'The container itself is left untouched.' : undefined,
+			note: isLocal ? 'You can choose next whether the container goes with it.' : undefined,
 			confirmLabel: 'Remove',
 			tone: 'danger'
 		});
 		if (!remove) return;
+		let removeContainer = false;
+		if (isLocal) {
+			removeContainer = await confirmDialog({
+				title: 'Remove the container too?',
+				message: `Stop and delete the container "${server.container_name}" as well? Its data folder and volumes stay on the host.`,
+				note: 'Keep it to remove the server from GameFleet only.',
+				confirmLabel: 'Delete container',
+				tone: 'danger'
+			});
+		}
 		try {
-			await api.serverId.deleteServer(server.id);
+			await api.serverId.deleteServer(server.id, { remove_container: removeContainer });
 			forgetServer(server.id);
 			goto(resolve('/main'));
 		} catch (err) {

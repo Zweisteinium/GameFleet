@@ -1686,7 +1686,7 @@ export class Api<
       }),
 
     /**
-     * @description Delete a game server. A Docker-linked server's container is hidden from discovery afterwards.
+     * @description Delete a game server. A Docker-linked server's container is hidden from discovery afterwards, or removed when asked to (the data directory and volumes are never touched).
      *
      * @tags servers
      * @name DeleteServer
@@ -1694,10 +1694,22 @@ export class Api<
      * @request DELETE:/api/servers/{server_id}
      * @secure
      */
-    deleteServer: (serverId: string, params: RequestParams = {}) =>
+    deleteServer: (
+      serverId: string,
+      query?: {
+        /**
+         * Remove Container
+         * Also stop and remove the Docker container; its data stays
+         * @default false
+         */
+        remove_container?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<any, HTTPValidationError>({
         path: `/api/servers/${serverId}`,
         method: "DELETE",
+        query: query,
         secure: true,
         format: "json",
         ...params,
