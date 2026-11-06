@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI
 from .api import auth as auth_api, create, docker, games, servers, settings as settings_api
 from .auth import current_user, log_startup_state
 from .db.session import init_db
+from .services.backup_service import clean_temp_files
 from .services.docker_discovery_service import DISCOVERY_INTERVAL, discovery_loop
 from .settings import DEV
 
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
         logging.getLogger(__name__).warning("Development mode (GAMEFLEET_DEV=true): API docs are served; not for production")
     log_startup_state()
     await init_db()
+    clean_temp_files()
     task = asyncio.create_task(discovery_loop()) if DISCOVERY_INTERVAL > 0 else None
     yield
     if task:

@@ -62,8 +62,8 @@
 		</h3>
 		<dl class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
 			{#each visibleRows as row (row.label)}
-				<div class="bg-surface-2 min-w-0 rounded-xl px-3 py-2">
-					<dt class="text-ink-3 text-[11px] font-semibold tracking-wide uppercase">{row.label}</dt>
+				<div class="tile">
+					<dt class="caption">{row.label}</dt>
 					<dd class="truncate text-sm font-medium" title={String(row.value)}>{row.value}</dd>
 				</div>
 			{/each}
@@ -78,7 +78,7 @@
 				</summary>
 				<dl class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
 					{#each rules as [key, value] (key)}
-						<div class="border-line min-w-0 rounded-lg border px-2.5 py-1.5">
+						<div class="border-line min-w-0 rounded-[var(--radius-control)] border px-2.5 py-1.5">
 							<dt class="text-ink-3 truncate font-mono text-[10px]">{key}</dt>
 							<dd class="truncate text-xs" title={value}>{value}</dd>
 						</div>

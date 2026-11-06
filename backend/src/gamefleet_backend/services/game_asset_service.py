@@ -30,6 +30,16 @@ STEAM_APP_IDS: dict[GameServerType, int] = {
     GameServerType.team_fortress_2: 440,
     GameServerType.garrys_mod: 4000,
     GameServerType.unturned: 304930,
+    GameServerType.left_4_dead_2: 550,
+    GameServerType.squad: 393380,
+    GameServerType.insurgency_sandstorm: 581320,
+    GameServerType.mordhau: 629760,
+    GameServerType.arma_reforger: 1874880,
+    GameServerType.soulmask: 2646460,
+    GameServerType.abiotic_factor: 427410,
+    GameServerType.space_engineers: 244850,
+    GameServerType.the_forest: 242760,
+    GameServerType.sons_of_the_forest: 1326470,
 }
 
 # Games without a Steam page get explicit URLs; anything missing here has no artwork (frontend shows a fallback).

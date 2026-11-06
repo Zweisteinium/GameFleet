@@ -16,32 +16,30 @@
 
 {#if options}
 	<div
-		class="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4 backdrop-blur-sm"
+		class="fixed inset-0 z-[60] grid place-items-center bg-black/40 p-4"
 		role="presentation"
 		onclick={(e) => e.target === e.currentTarget && answerConfirm(false)}
 	>
 		<div
-			class="card rise shadow-pop w-full max-w-md p-6"
+			class="card rise shadow-pop w-full max-w-md p-5"
 			role="alertdialog"
 			aria-modal="true"
 			aria-labelledby="confirm-title"
 			aria-describedby="confirm-message"
 		>
-			<div class="flex items-start gap-4">
+			<div class="flex items-start gap-3">
 				<span
-					class="grid h-10 w-10 shrink-0 place-items-center rounded-xl {danger
-						? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-						: 'bg-accent-soft text-accent'}"
+					class="pill {danger ? 'tone-bad' : 'tone-accent'} grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-control)] px-0"
 				>
-					<Icon name={danger ? 'alert' : 'info'} size={20} />
+					<Icon name={danger ? 'alert' : 'info'} size={18} />
 				</span>
 				<div class="min-w-0">
-					<h2 id="confirm-title" class="font-display text-lg font-semibold">{options.title}</h2>
+					<h2 id="confirm-title" class="text-base font-semibold">{options.title}</h2>
 					<p id="confirm-message" class="text-ink-2 mt-1 text-sm">{options.message}</p>
-					{#if options.note}<p class="text-ink-3 mt-2 text-xs">{options.note}</p>{/if}
+					{#if options.note}<p class="hint mt-2">{options.note}</p>{/if}
 				</div>
 			</div>
-			<div class="mt-6 flex justify-end gap-2">
+			<div class="mt-5 flex justify-end gap-2">
 				<button bind:this={cancelButton} class="btn-ghost" onclick={() => answerConfirm(false)}>
 					Cancel
 				</button>

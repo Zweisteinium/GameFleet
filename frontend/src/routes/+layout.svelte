@@ -4,8 +4,9 @@
 	import { resolve } from '$app/paths';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import Logo from '$lib/components/Logo.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-		import { session, loggedIn, logout } from '$lib/auth.svelte';
+	import { session, loggedIn, logout } from '$lib/auth.svelte';
 
 	let { children } = $props();
 
@@ -23,25 +24,18 @@
 	}
 </script>
 
-<div class="relative min-h-screen">
-	<div class="page-tint pointer-events-none absolute inset-x-0 top-0 h-80"></div>
-
-	<header class="relative z-10">
-		<div class="mx-auto flex h-16 max-w-[90rem] items-center justify-between px-4 sm:px-6">
+<div class="min-h-screen">
+	<header class="border-line bg-surface-1 border-b">
+		<div class="mx-auto flex h-14 max-w-[90rem] items-center justify-between px-4 sm:px-6">
 			<a href={resolve('/main')} class="flex items-center gap-2.5" aria-label="GameFleet home">
-				<span
-					class="grid h-9 w-9 place-items-center rounded-xl text-white shadow-card"
-					style="background: linear-gradient(135deg, var(--accent), var(--accent-2))"
-				>
-					<Icon name="rocket" size={18} />
-				</span>
-				<span class="font-display text-lg font-semibold tracking-tight">GameFleet</span>
+				<Logo size={22} class="text-accent" />
+				<span class="text-[15px] font-semibold tracking-tight">GameFleet</span>
 			</a>
 
 			<nav class="flex items-center gap-1">
 				<a
 					href={resolve('/main')}
-					class="btn-ghost h-9 px-3 text-sm"
+					class="btn-ghost h-8 px-2.5 text-sm"
 					aria-current={page.url.pathname.startsWith('/main') ? 'page' : undefined}
 				>
 					Servers
@@ -61,50 +55,48 @@
 						href="/swagger"
 						target="_blank"
 						rel="external noreferrer"
-						class="btn-ghost hidden h-9 px-3 text-sm sm:inline-flex"
+						class="btn-ghost hidden h-8 px-2.5 text-sm sm:inline-flex"
 					>
 						API
 					</a>
 				{/if}
 				<ThemeToggle />
 				{#if session.authEnabled && session.token}
-					<button class="btn-ghost h-9 px-3 text-sm" onclick={signOut} title="Sign out">
-						<Icon name="user" size={15} class="text-ink-3" />
+					<button class="btn-ghost h-8 px-2.5 text-sm" onclick={signOut} title="Sign out">
 						<span class="hidden sm:inline">{session.username}</span>
 						<Icon name="log-out" size={15} />
 					</button>
 				{:else if session.checked && session.authEnabled && !onLoginPage}
 					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() cannot carry a query string -->
-					<a href={loginHref} class="btn-ghost h-9 px-3 text-sm">
-						<Icon name="user" size={15} class="text-ink-3" />Sign in
-					</a>
+					<a href={loginHref} class="btn-outline h-8 px-3 text-sm">Sign in</a>
 				{/if}
 			</nav>
 		</div>
 	</header>
 
-	<main class="relative z-10 mx-auto max-w-[90rem] px-4 pb-16 sm:px-6">
+	<main class="mx-auto max-w-[90rem] px-4 pb-16 sm:px-6">
 		{#if session.checked && session.dev}
-			<p
-				class="border-accent/30 bg-accent-soft text-accent mt-2 flex items-center gap-2 rounded-xl border px-4 py-2 text-xs"
-			>
-				<Icon name="info" size={14} />
-				Development mode: API docs are exposed and logging is verbose. Not intended for production; set
-				<code class="font-mono">GAMEFLEET_DEV=false</code>.
+			<p class="notice tone-accent mt-4 text-xs">
+				<Icon name="info" size={14} class="mt-0.5 shrink-0" />
+				<span>
+					Development mode: API docs are exposed and logging is verbose. Not intended for
+					production; set <code class="font-mono">GAMEFLEET_DEV=false</code>.
+				</span>
 			</p>
 		{/if}
 		{#if session.checked && !session.authEnabled && !onLoginPage}
-			<p
-				class="mt-2 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-800 dark:text-amber-300"
-			>
-				<Icon name="alert" size={14} />
-				{#if session.admin}
-					Login is disabled and everyone can manage this dashboard: set
-					<code class="font-mono">GAMEFLEET_USERS</code> on the backend.
-				{:else}
-					No users are configured, so this dashboard is read-only: set
-					<code class="font-mono">GAMEFLEET_USERS</code> on the backend to sign in and manage servers.
-				{/if}
+			<p class="notice tone-warn mt-4 text-xs">
+				<Icon name="alert" size={14} class="mt-0.5 shrink-0" />
+				<span>
+					{#if session.admin}
+						Login is disabled and everyone can manage this dashboard: set
+						<code class="font-mono">GAMEFLEET_USERS</code> on the backend.
+					{:else}
+						No users are configured, so this dashboard is read-only: set
+						<code class="font-mono">GAMEFLEET_USERS</code> on the backend to sign in and manage
+						servers.
+					{/if}
+				</span>
 			</p>
 		{/if}
 		{#if session.checked}

@@ -22,9 +22,9 @@
 	const games = Object.entries(GAME_LABELS).sort((a, b) => a[1].localeCompare(b[1]));
 
 	const CONFIDENCE: Record<string, { label: string; tone: string }> = {
-		image: { label: 'known image', tone: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' },
-		keyword: { label: 'name match', tone: 'bg-amber-500/10 text-amber-700 dark:text-amber-400' },
-		port: { label: 'port match', tone: 'bg-amber-500/10 text-amber-700 dark:text-amber-400' }
+		image: { label: 'known image', tone: 'tone-ok' },
+		keyword: { label: 'name match', tone: 'tone-warn' },
+		port: { label: 'port match', tone: 'tone-warn' }
 	};
 
 	async function act(name: string, fn: () => Promise<unknown>) {
@@ -50,17 +50,17 @@
 </script>
 
 {#if candidates.length > 0 || hidden.length > 0}
-	<section class="card rise p-4 sm:p-5">
+	<section class="card p-4 sm:p-5">
 		<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 			<h2 class="section-title">
 				<Icon name="box" size={16} class="text-ink-3" />
 				Containers on this host
-				{#if candidates.length}<span class="text-ink-3 font-sans text-sm font-normal"
+				{#if candidates.length}<span class="text-ink-3 text-sm font-normal"
 						>({candidates.length} not imported)</span
 					>{/if}
 			</h2>
 			{#if hidden.length}
-				<button class="btn-ghost h-8 px-2 text-xs" onclick={() => (showHidden = !showHidden)}>
+				<button class="btn-ghost btn-sm" onclick={() => (showHidden = !showHidden)}>
 					<Icon name={showHidden ? 'eye-off' : 'eye'} size={14} />
 					{showHidden ? 'Hide' : 'Show'}
 					{hidden.length} hidden
@@ -69,11 +69,7 @@
 		</div>
 
 		{#if error}
-			<p
-				class="mb-3 flex items-center gap-2 rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-400"
-			>
-				<Icon name="alert" size={16} />{error}
-			</p>
+			<p class="notice tone-bad mb-3"><Icon name="alert" size={16} class="mt-0.5 shrink-0" />{error}</p>
 		{/if}
 
 		{#if candidates.length === 0}
@@ -86,10 +82,9 @@
 				{@const guessed = detected?.confidence === 'keyword' || detected?.confidence === 'port'}
 				<li class="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 {item.ignored ? 'opacity-60' : ''}">
 					<span
-						class="grid h-9 w-9 shrink-0 place-items-center rounded-xl {item.container.state ===
-						'running'
-							? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-							: 'bg-surface-2 text-ink-3'}"
+						class="pill {item.container.state === 'running'
+							? 'tone-ok'
+							: 'tone-neutral'} grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-control)] px-0"
 						title={item.container.status}
 					>
 						<Icon name="box" size={16} />
@@ -127,9 +122,7 @@
 								<span class="font-medium">{gameLabel(detected.game)}</span>
 							{/if}
 							<span
-								class="inline-flex h-6 items-center rounded-full px-2 font-medium {CONFIDENCE[
-									detected.confidence
-								]?.tone ?? ''}"
+								class="pill {CONFIDENCE[detected.confidence]?.tone ?? 'tone-neutral'}"
 								title={detected.reasons.join('; ')}
 							>
 								{CONFIDENCE[detected.confidence]?.label ?? detected.confidence}
@@ -145,7 +138,7 @@
 					<div class="ml-auto flex items-center gap-1.5">
 						{#if item.ignored}
 							<button
-								class="btn-ghost h-8 px-3 text-xs"
+								class="btn-ghost btn-sm"
 								disabled={busy !== null}
 								onclick={() =>
 									act(item.container.name, () =>
@@ -156,7 +149,7 @@
 							</button>
 						{:else}
 							<button
-								class="btn-ghost h-8 px-2 text-xs"
+								class="btn-ghost btn-sm"
 								disabled={busy !== null}
 								title="Hide this container from discovery"
 								onclick={() =>
@@ -165,7 +158,7 @@
 								<Icon name="eye-off" size={14} />
 							</button>
 							<button
-								class="btn-primary h-8 px-3 text-xs"
+								class="btn-primary btn-sm"
 								disabled={busy !== null || !detected}
 								onclick={() => importContainer(item)}
 							>

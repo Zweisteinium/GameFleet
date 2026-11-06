@@ -69,7 +69,7 @@
 		try {
 			[templates, settings] = await Promise.all([
 				api.templates.getTemplates().then((r) => r.data),
-				api.getSettings().then((r) => r.data)
+				api.getHostSettings().then((r) => r.data)
 			]);
 		} catch (err) {
 			loadError = detail(err, 'Could not load the templates from the backend.');
@@ -97,7 +97,10 @@
 			Object.entries(v.show_if ?? {}).every(([env, allowed]) => allowed.includes(current(env)))
 		)
 	);
-	const essentials = $derived(active.filter((v) => !v.advanced && v.type !== 'secret'));
+	// Secrets are generated, except required ones such as a join password that players need.
+	const essentials = $derived(
+		active.filter((v) => !v.advanced && (v.type !== 'secret' || v.required))
+	);
 	const advanced = $derived(active.filter((v) => v.advanced));
 	const gamePort = $derived(template?.ports?.[0]?.port ?? 0);
 	const missing = $derived(
@@ -198,7 +201,7 @@
 	function request(): CreateRequest {
 		const sent: Record<string, string> = {};
 		for (const variable of active) {
-			if (variable.type !== 'secret' && values[variable.env] !== undefined)
+			if ((variable.type !== 'secret' || variable.required) && values[variable.env] !== undefined)
 				sent[variable.env] = values[variable.env];
 		}
 		return {
@@ -281,12 +284,12 @@
 	<a href={resolve('/main')} class="meta mb-3 hover:text-ink"
 		><Icon name="arrow-left" size={14} />Servers</a
 	>
-	<h1 class="mb-1 font-display text-2xl font-semibold tracking-tight">New server</h1>
+	<h1 class="mb-1 text-2xl font-semibold">New server</h1>
 
 	{#if !loggedIn()}
 		<p class="card mt-6 p-6 text-sm text-ink-2">Sign in to create servers.</p>
 	{:else if loadError}
-		<p class="card mt-6 p-6 text-sm text-rose-600 dark:text-rose-400">{loadError}</p>
+		<p class="card mt-6 p-6 text-sm text-bad">{loadError}</p>
 	{:else if !settings}
 		<div class="py-16"><LoadingSpinner message="Loading templates…" /></div>
 	{:else}
@@ -312,9 +315,7 @@
 		{/if}
 
 		{#if settings.servers_dir_problem}
-			<p
-				class="mb-4 flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300"
-			>
+			<p class="notice tone-warn mb-4">
 				<Icon name="alert" size={16} class="mt-0.5 shrink-0" />
 				<span
 					>{settings.servers_dir_problem}
@@ -332,7 +333,7 @@
 					>
 						<GameArt game={item.game} class="aspect-[3/4] w-full" />
 						<div class="p-4">
-							<div class="font-display font-semibold">{item.label}</div>
+							<div class="font-semibold">{item.label}</div>
 							<p class="mt-1 text-xs text-ink-2">{item.description}</p>
 						</div>
 					</button>
@@ -550,7 +551,7 @@
 					</label>
 				{/if}
 
-				{#if error}<p class="text-sm text-rose-600 dark:text-rose-400">{error}</p>{/if}
+				{#if error}<p class="text-sm text-bad">{error}</p>{/if}
 				<div class="flex justify-between">
 					<button type="button" class="btn-ghost" onclick={() => (step = 0)}>Back</button>
 					<button class="btn-primary" type="submit" disabled={missing || previewing}>
@@ -576,12 +577,14 @@
 					</dd>
 					{#if preview.secrets.length}
 						<dt class="text-ink-2">Secrets</dt>
-						<dd>{preview.secrets.join(', ')} generated into .env</dd>
+						<dd>{preview.secrets.join(', ')} in .env, not in the compose file</dd>
 					{/if}
 				</dl>
 
 				{#each preview.holders as holder (holder.container_name)}
-					<p class="flex gap-2 rounded-xl bg-surface-2 px-3 py-2 text-xs text-ink-2">
+					<p
+						class="flex gap-2 rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-xs text-ink-2"
+					>
 						<Icon name="info" size={14} class="mt-0.5 shrink-0" />
 						<span>
 							{holder.server_name ?? holder.container_name} also uses {holder.ports.join(', ')}
@@ -615,17 +618,15 @@
 				<details class="text-sm">
 					<summary class="cursor-pointer text-ink-2">docker-compose.yml</summary>
 					<pre
-						class="mt-2 overflow-auto rounded-xl bg-surface-2 p-4 font-mono text-xs">{preview.compose}</pre>
+						class="mt-2 overflow-auto rounded-[var(--radius-control)] bg-surface-2 p-4 font-mono text-xs">{preview.compose}</pre>
 				</details>
 
 				{#if preview.problems.length}
-					<ul
-						class="space-y-1 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300"
-					>
+					<ul class="notice tone-bad flex-col space-y-1">
 						{#each preview.problems as problem (problem)}<li>{problem}</li>{/each}
 					</ul>
 				{/if}
-				{#if error}<p class="text-sm text-rose-600 dark:text-rose-400">{error}</p>{/if}
+				{#if error}<p class="text-sm text-bad">{error}</p>{/if}
 
 				<div class="flex justify-between">
 					<button class="btn-ghost" onclick={() => (step = 1)}>Back</button>
@@ -641,7 +642,7 @@
 		{:else if step === 3 && job}
 			<div class="card mt-6 space-y-5 p-6">
 				<div>
-					<h2 class="font-display text-lg font-semibold">{job.name}</h2>
+					<h2 class="text-lg font-semibold">{job.name}</h2>
 					<p class="meta font-mono">{job.folder}</p>
 				</div>
 				<ol class="space-y-2">
@@ -653,8 +654,8 @@
 								: ''}"
 						>
 							<span class="grid h-5 w-5 place-items-center">
-								{#if state === 'done'}<Icon name="check" size={16} class="text-emerald-500" />
-								{:else if state === 'failed'}<Icon name="x" size={16} class="text-rose-500" />
+								{#if state === 'done'}<Icon name="check" size={16} class="text-ok" />
+								{:else if state === 'failed'}<Icon name="x" size={16} class="text-bad" />
 								{:else if state === 'active'}<span
 										class="h-2 w-2 animate-pulse rounded-full bg-accent"
 									></span>
@@ -681,25 +682,21 @@
 				{#if job.phase === 'waiting' && job.ready_hint}<p class="meta">{job.ready_hint}</p>{/if}
 				{#if job.log?.length}
 					<pre
-						class="max-h-72 overflow-auto rounded-xl bg-surface-2 p-4 font-mono text-xs">{job.log.join(
+						class="max-h-72 overflow-auto rounded-[var(--radius-control)] bg-surface-2 p-4 font-mono text-xs">{job.log.join(
 							'\n'
 						)}</pre>
 				{/if}
 				{#if job.warning}
-					<p
-						class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300"
-					>
+					<p class="notice tone-warn">
 						{job.warning}
 					</p>
 				{/if}
 				{#if job.error}
-					<p
-						class="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300"
-					>
+					<p class="notice tone-bad">
 						{job.error}
 					</p>
 				{/if}
-				{#if error}<p class="text-sm text-rose-600 dark:text-rose-400">{error}</p>{/if}
+				{#if error}<p class="text-sm text-bad">{error}</p>{/if}
 
 				<div class="flex justify-end gap-2">
 					<a href={resolve('/main')} class="btn-ghost">Back to servers</a>

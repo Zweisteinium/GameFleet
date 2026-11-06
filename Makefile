@@ -32,7 +32,7 @@ check: ## Type-check and lint the frontend, import-check the backend
 	cd frontend && pnpm check && pnpm exec eslint .
 	cd backend && uv run python -c "import gamefleet_backend.main"
 
-test: ## Run the backend tests (templates, compose generation, settings checks)
+test: ## Run the backend tests
 	cd backend && uv run pytest -q
 
 swagger: ## Regenerate frontend/src/lib/api from the running dev backend's OpenAPI schema (make backend)

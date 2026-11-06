@@ -4,13 +4,14 @@ Everything here works on the *list* representation of containers (one API call, 
 except where the full config is needed (environment variables for RCON passwords).
 """
 import asyncio
+from contextlib import asynccontextmanager
 import io
 import logging
 import os
 import re
 import tarfile
 import time
-from typing import Any, Iterable, Iterator, Optional
+from typing import Any, AsyncIterator, Callable, Iterable, Iterator, Optional
 
 import docker
 import docker.errors
@@ -268,7 +269,12 @@ class DockerService:
                     containers = await self.list_raw()
                 except (DockerUnavailable, docker.errors.DockerException, OSError):
                     return None
-                self._states = (time.monotonic(), {map_container(c).name: c.get("State", "unknown") for c in containers})
+                # "starting" while a running container's health check has not passed yet.
+                self._states = (time.monotonic(), {
+                    map_container(c).name: "starting" if c.get("State") == "running" and "(health: starting)" in (c.get("Status") or "")
+                    else c.get("State", "unknown")
+                    for c in containers
+                })
             return self._states[1]
 
     async def inspect(self, name: str) -> dict[str, Any]:
@@ -337,13 +343,42 @@ class DockerService:
             return code if code is not None else -1, output.decode("utf-8", errors="replace")
         return await self._call(run, long=True)
 
-    async def put_archive(self, name: str, path: str, data: Iterable[bytes]) -> None:
+    async def put_archive(self, name: str, path: str, data: "bytes | Iterable[bytes]") -> None:
         """Extract a tar stream into `path` of the container (works while it is stopped)."""
         await self._call(lambda c: c.api.put_archive(name, path, data), long=True)
 
     async def get_archive(self, name: str, path: str) -> tuple[Iterator[bytes], dict[str, Any]]:
         """Tar stream of a path in the container plus its stat (size, mtime); works while it is stopped."""
         return await self._call(lambda c: c.api.get_archive(name, path))
+
+    async def stat_file(self, name: str, path: str) -> Optional[dict[str, Any]]:
+        """Docker's stat of a path in the container (name, size, mode, mtime), None when it does not exist."""
+        def read(c: docker.DockerClient) -> Optional[dict[str, Any]]:
+            try:
+                stream, stat = c.api.get_archive(name, path)
+            except docker.errors.NotFound:
+                return None
+            for _ in stream:  # drain, the archive itself is not wanted
+                pass
+            return stat
+        return await self._call(read)
+
+    @asynccontextmanager
+    async def container_shell(self, name: str) -> AsyncIterator[Callable]:
+        """`run(script, **env)` inside the game container while it runs, else in a helper that shares its
+        mounts (create_helper). Raises RuntimeError with the script's last output line on failure."""
+        running = (await self.inspect(name)).get("State", {}).get("Running")
+        helper = None if running else await self.create_helper(name)
+        try:
+            async def run(script: str, **env: str) -> str:
+                code, output = await self.shell(helper or name, script, env)
+                if code != 0:
+                    raise RuntimeError(output.strip().splitlines()[-1] if output.strip() else f"script failed ({code})")
+                return output
+            yield run
+        finally:
+            if helper:
+                await self.remove_container(helper)
 
     # ---- creating servers -----------------------------------------------------------------------------
 

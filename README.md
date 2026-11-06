@@ -67,10 +67,12 @@ Then open http://localhost:3000. Visitors see the servers you mark as public, an
 
 ## Features
 
-- Live status, players, version, map, MOTD, mods and game-specific details for 20+ games, refreshed every 30 seconds
+- Live status, players, version, map, MOTD, mods and game-specific details for 30 games, refreshed every 30 seconds
 - Search, filters, sorting, grid and list view, light and dark theme, real game artwork
 - Public by default: visitors see the servers you mark as public, signing in unlocks the rest
 - Game servers in Docker on the same host are recognised automatically: start, stop, restart, CPU, memory and disk usage
+- Deploy new servers from a template: Minecraft Java and Bedrock, Factorio, Valheim and Satisfactory
+- Edit server settings in a form (`server.properties`, Factorio's server settings) or any config file in a raw editor
 - Modpack detection for Minecraft (Modrinth, CurseForge, FTB, GTNH)
 - Restore from the backups your servers already make, or from an uploaded file
 - Create new servers in a few clicks: Minecraft with Modrinth and CurseForge modpacks, written as plain compose projects you can still edit by hand
@@ -87,7 +89,7 @@ GameFleet asks every server directly with the game's own protocol, so there is n
 | Satisfactory | HTTPS API of the dedicated server, with a passwordless client login | Session, tech tier, game phase, tick rate and players. Servers with a join password cannot be read yet |
 | ARK: Survival Evolved | Steam A2S on the query port (default 27015) | In-game day, mods, PvE or PvP, cluster, BattlEye |
 | ARK: Survival Ascended | Epic Online Services, found through ARK's official server lists | Official and public servers are found by name. Private servers need RCON (`ListPlayers`) |
-| Valheim, Rust, 7 Days to Die, Palworld, Project Zomboid, Enshrouded, V Rising, Conan Exiles, DayZ, Counter-Strike, Team Fortress 2, Garry's Mod, Unturned | Steam A2S over UDP: server info, player list and rules | The default query port of each game is prefilled. Player names appear where the game reports them, and the raw rules are shown on the server page |
+| Valheim, Rust, 7 Days to Die, Palworld, Project Zomboid, Enshrouded, V Rising, Conan Exiles, DayZ, Counter-Strike, Team Fortress 2, Garry's Mod, Unturned, Left 4 Dead 2, Squad, Insurgency: Sandstorm, Mordhau, Arma Reforger, Soulmask, Abiotic Factor, Space Engineers, The Forest, Sons of the Forest | Steam A2S over UDP: server info, player list and rules | The default query port of each game is prefilled. Player names appear where the game reports them, and the raw rules are shown on the server page |
 | Any other Steam game | Steam A2S | Pick "Steam game (A2S)" and enter the query port |
 
 The port of a server is always the one players connect to. Query and RCON ports only need to be set when they differ from the game's defaults, and the add-server form shows those.
@@ -97,6 +99,12 @@ The port of a server is always the one players connect to. Query and RCON ports 
 With the Docker socket mounted, GameFleet looks at every container on the host and recognises game servers by their image (`itzg/minecraft-server`, `factoriotools/factorio`, `wolveix/satisfactory-server`, `lloesche/valheim-server` and many more). Container names and ports are used as a hint when the image is unknown. There is nothing to label or configure, because data paths, ports and RCON passwords are read from the container itself.
 
 **Import from Docker** on the dashboard adds all running game servers at once. Single containers, stopped ones included, can be imported from the host panel. Several instances of one game on the same port are fine too: starting one whose port is taken offers to stop the other first.
+
+## Settings
+
+Servers in Docker get a **Settings** panel with the important options as a form: for Minecraft the `server.properties` keys such as MOTD, difficulty, game mode, PvP, whitelist and view distance, for Factorio the `server-settings.json` values. Anything else is reachable through **Edit file**, a raw editor for the known config files of each game (ops and whitelist, Paper and Spigot configs, Factorio map settings, Valheim admin lists, Satisfactory ini files). Changes are written to the container and apply on the next start; the panel offers the restart.
+
+Settings that the container sets from its environment (itzg's `MOTD`, `MAX_PLAYERS` and the like) are shown but locked, because the image rewrites them on every start. Change those in the compose file.
 
 ## Backups
 
@@ -115,9 +123,9 @@ Other folders with "backup" in their name next to the server's data are searched
 
 ## Creating servers
 
-**Create server** on the dashboard walks through three steps: the game, the essentials (name, version or modpack, memory, the EULA where there is one, more behind "Advanced") and a review with the compose file it will write. GameFleet then creates `<servers folder>/<game>/<name>/` with `docker-compose.yml`, `.env` (generated secrets such as the RCON password) and `data/`, pulls the image, creates the container and starts it, showing the log until the server reports itself healthy.
+**Add server → Deploy a new server** walks through three steps: the game, the essentials (name, version or modpack, memory, the EULA where there is one, more behind "Advanced") and a review with the compose file it will write. Templates exist for Minecraft Java (`itzg/minecraft-server`, with Paper, Fabric, Forge, NeoForge, GT New Horizons and modpacks from Modrinth or CurseForge), Minecraft Bedrock, Factorio, Valheim and Satisfactory. GameFleet then creates `<servers folder>/<game>/<name>/` with `docker-compose.yml`, `.env` (secrets such as the RCON or join password) and `data/`, pulls the image, creates the container and starts it, showing the log until the server reports itself healthy.
 
-The result is an ordinary compose project: `docker compose up -d` in that folder works as before, and you can edit the file by hand. Servers of one game share the game's default port unless you pick another, so only one of them runs at a time; GameFleet offers to stop the other one.
+The result is an ordinary compose project: `docker compose up -d` in that folder works as before, and you can edit the file by hand. Images use pinned tags (Java version, stable channel) instead of `latest` where the image offers them. Servers of one game share the game's default port unless you pick another, so only one of them runs at a time; GameFleet offers to stop the other one.
 
 The servers folder is set on the **Settings** page, together with the owner of new folders, the public address and the defaults for memory, CPU, restart policy, stop grace period and time zone. The backend needs that folder mounted **at the same path** (`docker compose` hands the paths it sees to the Docker daemon), which `docker-compose.yml` does with `GAMEFLEET_SERVERS_DIR`. Games are described by small YAML templates in `backend/src/gamefleet_backend/templates/`.
 

@@ -21,7 +21,7 @@
 	onMount(async () => {
 		if (!loggedIn()) return;
 		try {
-			settings = (await api.getSettings()).data;
+			settings = (await api.getHostSettings()).data;
 			cpuLimit = settings.cpu_limit ?? null;
 		} catch (err) {
 			error = detail(err, 'Could not load the settings.');
@@ -38,7 +38,7 @@
 			const values = { ...settings };
 			delete values.servers_dir_problem;
 			settings = (
-				await api.updateSettings({
+				await api.updateHostSettings({
 					...values,
 					servers_dir: values.servers_dir?.trim() || null,
 					public_address: values.public_address?.trim() || null,
@@ -57,14 +57,14 @@
 <svelte:head><title>Settings · GameFleet</title></svelte:head>
 
 <div class="mx-auto max-w-2xl pt-6">
-	<h1 class="mb-1 font-display text-2xl font-semibold tracking-tight">Settings</h1>
+	<h1 class="mb-1 text-2xl font-semibold">Settings</h1>
 	<p class="mb-6 text-sm text-ink-2">Where new servers are created and what they start with.</p>
 
 	{#if !loggedIn()}
 		<p class="card p-6 text-sm text-ink-2">Sign in to change the settings.</p>
 	{:else if !settings}
 		{#if error}
-			<p class="card p-6 text-sm text-rose-600 dark:text-rose-400">{error}</p>
+			<p class="card p-6 text-sm text-bad">{error}</p>
 		{:else}
 			<div class="py-16"><LoadingSpinner message="Loading settings…" /></div>
 		{/if}
@@ -88,13 +88,11 @@
 					</p>
 				</div>
 				{#if settings.servers_dir_problem}
-					<p
-						class="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300"
-					>
+					<p class="notice tone-warn text-xs">
 						<Icon name="alert" size={14} class="mt-0.5 shrink-0" />{settings.servers_dir_problem}
 					</p>
 				{:else}
-					<p class="meta text-emerald-600 dark:text-emerald-400">
+					<p class="meta text-ok">
 						<Icon name="check" size={14} />GameFleet can create servers here.
 					</p>
 				{/if}
@@ -203,7 +201,7 @@
 			</section>
 
 			<div class="flex items-center justify-end gap-3">
-				{#if error}<span class="text-sm text-rose-600 dark:text-rose-400">{error}</span>{/if}
+				{#if error}<span class="text-sm text-bad">{error}</span>{/if}
 				{#if saved}<span class="meta"><Icon name="check" size={14} />Saved</span>{/if}
 				<button class="btn-primary" type="submit" disabled={saving}
 					>{saving ? 'Saving…' : 'Save'}</button

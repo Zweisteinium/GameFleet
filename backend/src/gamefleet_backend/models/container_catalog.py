@@ -93,6 +93,16 @@ KEYWORDS: list[tuple[re.Pattern[str], GameServerType]] = [
     (re.compile(r"\btf2\b|team-?fortress", re.I), GameServerType.team_fortress_2),
     (re.compile(r"gmod|garry", re.I), GameServerType.garrys_mod),
     (re.compile(r"unturned", re.I), GameServerType.unturned),
+    (re.compile(r"l4d2|left[-_ ]?4[-_ ]?dead", re.I), GameServerType.left_4_dead_2),
+    (re.compile(r"\bsquad\b", re.I), GameServerType.squad),
+    (re.compile(r"insurgency|sandstorm", re.I), GameServerType.insurgency_sandstorm),
+    (re.compile(r"mordhau", re.I), GameServerType.mordhau),
+    (re.compile(r"reforger|arma", re.I), GameServerType.arma_reforger),
+    (re.compile(r"soulmask", re.I), GameServerType.soulmask),
+    (re.compile(r"abiotic", re.I), GameServerType.abiotic_factor),
+    (re.compile(r"space[-_ ]?engineers", re.I), GameServerType.space_engineers),
+    (re.compile(r"\bthe[-_ ]?forest\b", re.I), GameServerType.the_forest),
+    (re.compile(r"sons[-_ ]?of[-_ ]?the[-_ ]?forest|\bsotf\b", re.I), GameServerType.sons_of_the_forest),
     (re.compile(r"steamcmd|srcds", re.I), GameServerType.steam),
 ]
 

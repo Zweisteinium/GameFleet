@@ -23,6 +23,16 @@ class GameServerType(str, Enum):
     team_fortress_2 = "team_fortress_2"
     garrys_mod = "garrys_mod"
     unturned = "unturned"
+    left_4_dead_2 = "left_4_dead_2"
+    squad = "squad"
+    insurgency_sandstorm = "insurgency_sandstorm"
+    mordhau = "mordhau"
+    arma_reforger = "arma_reforger"
+    soulmask = "soulmask"
+    abiotic_factor = "abiotic_factor"
+    space_engineers = "space_engineers"
+    the_forest = "the_forest"
+    sons_of_the_forest = "sons_of_the_forest"
     steam = "steam"
 
 
@@ -76,5 +86,15 @@ GAME_CATALOG: dict[GameServerType, GameSpec] = {
     GameServerType.team_fortress_2: GameSpec("Team Fortress 2", QueryProtocol.a2s, 27015),
     GameServerType.garrys_mod: GameSpec("Garry's Mod", QueryProtocol.a2s, 27015),
     GameServerType.unturned: GameSpec("Unturned", QueryProtocol.a2s, 27015, query_port=lambda p: p + 1),
+    GameServerType.left_4_dead_2: GameSpec("Left 4 Dead 2", QueryProtocol.a2s, 27015),
+    GameServerType.squad: GameSpec("Squad", QueryProtocol.a2s, 7787, query_port=27165),
+    GameServerType.insurgency_sandstorm: GameSpec("Insurgency: Sandstorm", QueryProtocol.a2s, 27102, query_port=27131),
+    GameServerType.mordhau: GameSpec("Mordhau", QueryProtocol.a2s, 7777, query_port=27015),
+    GameServerType.arma_reforger: GameSpec("Arma Reforger", QueryProtocol.a2s, 2001, query_port=17777),
+    GameServerType.soulmask: GameSpec("Soulmask", QueryProtocol.a2s, 8777, query_port=27015),
+    GameServerType.abiotic_factor: GameSpec("Abiotic Factor", QueryProtocol.a2s, 7777, query_port=27015),
+    GameServerType.space_engineers: GameSpec("Space Engineers", QueryProtocol.a2s, 27016),
+    GameServerType.the_forest: GameSpec("The Forest", QueryProtocol.a2s, 27015, query_port=27016),
+    GameServerType.sons_of_the_forest: GameSpec("Sons of the Forest", QueryProtocol.a2s, 8766, query_port=27016),
     GameServerType.steam: GameSpec("Other Steam game (A2S)", QueryProtocol.a2s, 27015),
 }

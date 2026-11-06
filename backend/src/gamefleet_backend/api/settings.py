@@ -19,12 +19,12 @@ async def _view(settings: HostSettingsBase) -> SettingsView:
     return SettingsView(**settings.model_dump(), servers_dir_problem=await servers_dir_problem(settings))
 
 
-@router.get("", response_model=SettingsView, operation_id="getSettings")
+@router.get("", response_model=SettingsView, operation_id="getHostSettings")
 async def get_settings(session: AsyncSession = Depends(get_session)):
     """Settings of this GameFleet installation and whether new servers can be created with them."""
     return await _view(await load_settings(session))
 
 
-@router.put("", response_model=SettingsView, operation_id="updateSettings")
+@router.put("", response_model=SettingsView, operation_id="updateHostSettings")
 async def update_settings(body: HostSettingsBase, session: AsyncSession = Depends(get_session)):
     return await _view(await save_settings(session, body))

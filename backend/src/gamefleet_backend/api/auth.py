@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from gamefleet_backend import auth
@@ -28,13 +28,20 @@ class SessionInfo(BaseModel):
 
 
 @router.post("/login", response_model=LoginResponse, operation_id="login")
-def login(body: LoginRequest):
-    """Exchange username and password for a bearer token."""
+def login(body: LoginRequest, request: Request):
+    """Exchange username and password for a bearer token. Ten failures from one address block it for ten
+    minutes (429 with Retry-After)."""
     if not auth.AUTH_ENABLED:
         raise HTTPException(status_code=400, detail="No users are configured (GAMEFLEET_USERS is not set)")
+    client = request.client.host if request.client else "unknown"
+    if wait := auth.login_blocked(client):
+        raise HTTPException(status_code=429, detail="Too many failed logins; try again later.",
+                            headers={"Retry-After": str(wait)})
     user = auth.authenticate(body.username.strip(), body.password)
     if user is None:
+        auth.login_failed(client)
         raise HTTPException(status_code=401, detail="Wrong username or password")
+    auth.login_succeeded(client)
     token, expires_at = auth.create_token(user.name)
     return LoginResponse(token=token, username=user.name, expires_at=expires_at)
 

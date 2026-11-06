@@ -9,15 +9,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from gamefleet_backend import auth
 from gamefleet_backend.auth import current_user, download_user, is_admin
 from gamefleet_backend.db.models.game_server import GameServer, GameServerPublic
 from gamefleet_backend.dependencies import get_docker_discovery_service, get_game_server_service
+from gamefleet_backend.models.config_info import ConfigInfo, FileContent, FileUpdate, FileWritten, SettingsUpdate
 from gamefleet_backend.models.container_info import HostStats
 from gamefleet_backend.models.game_server_type import GAME_CATALOG, GameServerType, QueryProtocol
 from gamefleet_backend.models.server_info import LiveServerInfo
 from gamefleet_backend.services.backup_service import (
     BackupError, BackupInfo, BackupJob, World, backup_service, plan_upload,
 )
+from gamefleet_backend.services.config_service import ConfigError, config_service
 from gamefleet_backend.services.docker_discovery_service import DockerDiscoveryService
 from gamefleet_backend.services.docker_service import DockerUnavailable, docker_service
 from gamefleet_backend.services.game_server_service import GameServerService
@@ -217,16 +220,26 @@ async def update_server(
 @router.delete('/{server_id}', operation_id="deleteServer", dependencies=LOGIN)
 async def delete_server(
     server_id: str,
+    remove_container: bool = Query(False, description="Also stop and remove the Docker container; its data stays"),
     service: GameServerService = Depends(get_game_server_service),
     discovery: DockerDiscoveryService = Depends(get_docker_discovery_service),
 ):
-    """Delete a game server. A Docker-linked server's container is hidden from discovery afterwards."""
+    """Delete a game server. A Docker-linked server's container is hidden from discovery afterwards, or removed
+    when asked to (the data directory and volumes are never touched)."""
     server = await service.get_server_by_id(server_id)
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     if server.source == "docker" and server.container_name:
-        # Otherwise discovery would offer (or re-import) the container right away.
-        await discovery.set_ignored(server.container_name, True)
+        if remove_container:
+            try:
+                await docker_service.remove_container(server.container_name)
+            except DockerUnavailable as exc:
+                raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
+            except docker.errors.APIError as exc:
+                raise HTTPException(status_code=502, detail=f"Docker refused the request: {exc.explanation or exc}")
+        else:
+            # Otherwise discovery would offer (or re-import) the container right away.
+            await discovery.set_ignored(server.container_name, True)
         docker_service.forget(server.container_name)
     await service.delete_server(server_id)
     return {"message": "Server deleted successfully"}
@@ -422,11 +435,34 @@ async def restore_upload(
         raise
 
 
+class DownloadTokenRequest(BaseModel):
+    path: str
+
+
+class DownloadToken(BaseModel):
+    token: str
+    expires_at: int
+
+
+@router.post('/{server_id}/backups/download-token', response_model=DownloadToken, operation_id="createDownloadToken",
+             dependencies=LOGIN)
+async def create_download_token(server_id: str, body: DownloadTokenRequest,
+                                service: GameServerService = Depends(get_game_server_service)):
+    """A ten-minute link token for one backup, so the download link carries no session token."""
+    world = await _world(server_id, service)
+    try:
+        backup = await backup_service.find(world, body.path)
+    except (BackupError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _backup_error(exc)
+    token, expires_at = auth.create_download_token(server_id, backup.path)
+    return DownloadToken(token=token, expires_at=expires_at)
+
+
 @router.get('/{server_id}/backups/download', operation_id="downloadBackup", dependencies=[Depends(download_user)],
             response_class=StreamingResponse)
 async def download_backup(server_id: str, path: str = Query(...),
                           service: GameServerService = Depends(get_game_server_service)):
-    """Download one of the listed backups. Accepts the bearer token as `?token=` so a plain link works."""
+    """Download one of the listed backups. Needs a login, or `?dl=` from `createDownloadToken`."""
     world = await _world(server_id, service)
     try:
         stream, size = await backup_service.download(world, path)
@@ -438,3 +474,56 @@ async def download_backup(server_id: str, path: str = Query(...),
     if size:
         headers["Content-Length"] = str(size)
     return StreamingResponse(stream, media_type="application/octet-stream", headers=headers)
+
+
+# ---- settings (Docker-linked servers, login required) ---------------------------------------------------
+
+def _config_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, ConfigError):
+        return HTTPException(status_code=409, detail=str(exc))
+    if isinstance(exc, DockerUnavailable):
+        return HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
+    return HTTPException(status_code=502, detail=f"Docker refused the request: {getattr(exc, 'explanation', None) or exc}")
+
+
+@router.get('/{server_id}/config', response_model=ConfigInfo, operation_id="getConfig", dependencies=LOGIN)
+async def get_config(server_id: str, service: GameServerService = Depends(get_game_server_service)):
+    """The important settings of the server as a form, and the text files it may edit."""
+    server = await _docker_server(server_id, service)
+    try:
+        return await config_service.info(server)
+    except (ConfigError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _config_error(exc)
+
+
+@router.put('/{server_id}/config/settings', response_model=ConfigInfo, operation_id="updateSettings", dependencies=LOGIN)
+async def update_settings(server_id: str, body: SettingsUpdate,
+                          service: GameServerService = Depends(get_game_server_service)):
+    """Write changed settings into the settings file; the server reads them on its next start."""
+    server = await _docker_server(server_id, service)
+    try:
+        return await config_service.update_settings(server, body.values)
+    except (ConfigError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _config_error(exc)
+
+
+@router.get('/{server_id}/config/file', response_model=FileContent, operation_id="getConfigFile", dependencies=LOGIN)
+async def get_config_file(server_id: str, path: str = Query(...),
+                          service: GameServerService = Depends(get_game_server_service)):
+    """One of the listed text files (up to 1 MiB)."""
+    server = await _docker_server(server_id, service)
+    try:
+        return await config_service.read(server, path)
+    except (ConfigError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _config_error(exc)
+
+
+@router.put('/{server_id}/config/file', response_model=FileWritten, operation_id="updateConfigFile", dependencies=LOGIN)
+async def update_config_file(server_id: str, body: FileUpdate,
+                             service: GameServerService = Depends(get_game_server_service)):
+    """Replace one of the listed text files; JSON files must parse."""
+    server = await _docker_server(server_id, service)
+    try:
+        return await config_service.write(server, body.path, body.content)
+    except (ConfigError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _config_error(exc)

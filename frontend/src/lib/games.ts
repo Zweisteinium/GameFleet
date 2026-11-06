@@ -20,6 +20,16 @@ export const GAME_LABELS: Record<GameServerType, string> = {
 	[GameServerType.TeamFortress2]: 'Team Fortress 2',
 	[GameServerType.GarrysMod]: "Garry's Mod",
 	[GameServerType.Unturned]: 'Unturned',
+	[GameServerType.Left4Dead2]: 'Left 4 Dead 2',
+	[GameServerType.Squad]: 'Squad',
+	[GameServerType.InsurgencySandstorm]: 'Insurgency: Sandstorm',
+	[GameServerType.Mordhau]: 'Mordhau',
+	[GameServerType.ArmaReforger]: 'Arma Reforger',
+	[GameServerType.Soulmask]: 'Soulmask',
+	[GameServerType.AbioticFactor]: 'Abiotic Factor',
+	[GameServerType.SpaceEngineers]: 'Space Engineers',
+	[GameServerType.TheForest]: 'The Forest',
+	[GameServerType.SonsOfTheForest]: 'Sons of the Forest',
 	[GameServerType.Steam]: 'Steam game (A2S)'
 };
 

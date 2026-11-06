@@ -7,6 +7,8 @@ class ServerStatus(str, Enum):
     ONLINE = "online"
     OFFLINE = "offline"
     UNKNOWN = "unknown"
+    # A Docker-linked server whose container runs but has not passed its health check yet.
+    STARTING = "starting"
 
 
 class BaseServerInfo(BaseModel):

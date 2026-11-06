@@ -1,6 +1,6 @@
 [project]
 name = "gamefleet-backend"
-version = "1.4.0"
+version = "2.0.0"
 description = "GameFleet API: queries game servers with their native protocols and manages the dashboard data"
 requires-python = ">=3.14"
 dependencies = [
@@ -17,9 +17,6 @@ dependencies = [
     "pyyaml>=6.0.2",
 ]
 
-[dependency-groups]
-dev = ["pytest>=8.4.0"]
-
 [tool.uv]
 # satisfactory-api-client 0.2.1 declares python-dotenv~=1.0.1 but never imports it; allow the current release.
 override-dependencies = ["python-dotenv>=1.2.3"]
@@ -27,6 +24,11 @@ override-dependencies = ["python-dotenv>=1.2.3"]
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
