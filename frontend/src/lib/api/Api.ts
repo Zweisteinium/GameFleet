@@ -238,6 +238,96 @@ export interface BaseServerInfo {
 	error_message?: string | null;
 }
 
+/** ComposeFile */
+export interface ComposeFile {
+	/** Path */
+	path: string;
+	/** Content */
+	content: string;
+}
+
+/** ComposeFileUpdate */
+export interface ComposeFileUpdate {
+	/** Content */
+	content: string;
+}
+
+/** ComposeInfo */
+export interface ComposeInfo {
+	/** Supported */
+	supported: boolean;
+	/** Reason */
+	reason?: string | null;
+	/** File */
+	file?: string | null;
+	/** Project */
+	project?: string | null;
+	/** Service */
+	service?: string | null;
+	/**
+	 * Settings
+	 * @default []
+	 */
+	settings?: ComposeSetting[];
+	/**
+	 * Pending
+	 * @default []
+	 */
+	pending?: string[];
+}
+
+/**
+ * ComposeSetting
+ * A setting kept in the environment of the server's compose service.
+ */
+export interface ComposeSetting {
+	/** Key */
+	key: string;
+	/** Label */
+	label: string;
+	/** Type */
+	type: 'bool' | 'int' | 'str' | 'enum';
+	/**
+	 * Description
+	 * @default ""
+	 */
+	description?: string;
+	/**
+	 * Options
+	 * @default []
+	 */
+	options?: string[];
+	/**
+	 * Group
+	 * @default ""
+	 */
+	group?: string;
+	/** Env */
+	env: string;
+	/** Value */
+	value?: boolean | number | string | null;
+	/** Readonly */
+	readonly?: string | null;
+	/** File Value */
+	file_value?: boolean | number | string | null;
+	/**
+	 * Multiline
+	 * @default false
+	 */
+	multiline?: boolean;
+	/**
+	 * Motd
+	 * @default false
+	 */
+	motd?: boolean;
+}
+
+/** ComposeUpdate */
+export interface ComposeUpdate {
+	/** Values */
+	values: Record<string, boolean | number | string | null>;
+}
+
 /** ConfigFile */
 export interface ConfigFile {
 	/** Path */
@@ -1014,6 +1104,15 @@ export interface PowerRequest {
 	stop_conflicting?: boolean;
 }
 
+/** RecreateRequest */
+export interface RecreateRequest {
+	/**
+	 * Stop Conflicting
+	 * @default false
+	 */
+	stop_conflicting?: boolean;
+}
+
 /** RestoreRequest */
 export interface RestoreRequest {
 	/** Path */
@@ -1382,6 +1481,13 @@ export interface TemplateVariable {
 	 * @default {}
 	 */
 	show_if?: Record<string, string[]>;
+	/**
+	 * Settings
+	 * @default true
+	 */
+	settings?: boolean;
+	/** Group */
+	group?: string | null;
 }
 
 /** ValidationError */
@@ -1633,7 +1739,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
 /**
  * @title Game Server Dashboard API
- * @version 2.0.0
+ * @version 2.1.0
  *
  * API for managing and monitoring game servers
  */
@@ -2267,6 +2373,102 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
 			this.request<FileWritten, HTTPValidationError>({
 				path: `/api/servers/${serverId}/config/file`,
 				method: 'PUT',
+				body: data,
+				secure: true,
+				type: ContentType.Json,
+				format: 'json',
+				...params
+			}),
+
+		/**
+		 * @description The settings kept in the environment of the server's compose service, and which ones are not applied yet.
+		 *
+		 * @tags servers
+		 * @name GetCompose
+		 * @summary Get Compose
+		 * @request GET:/api/servers/{server_id}/compose
+		 * @secure
+		 */
+		getCompose: (serverId: string, params: RequestParams = {}) =>
+			this.request<ComposeInfo, HTTPValidationError>({
+				path: `/api/servers/${serverId}/compose`,
+				method: 'GET',
+				secure: true,
+				format: 'json',
+				...params
+			}),
+
+		/**
+		 * @description Change variables in the compose file (null removes one). They apply when the container is recreated.
+		 *
+		 * @tags servers
+		 * @name UpdateComposeSettings
+		 * @summary Update Compose Settings
+		 * @request PUT:/api/servers/{server_id}/compose/settings
+		 * @secure
+		 */
+		updateComposeSettings: (serverId: string, data: ComposeUpdate, params: RequestParams = {}) =>
+			this.request<ComposeInfo, HTTPValidationError>({
+				path: `/api/servers/${serverId}/compose/settings`,
+				method: 'PUT',
+				body: data,
+				secure: true,
+				type: ContentType.Json,
+				format: 'json',
+				...params
+			}),
+
+		/**
+		 * No description
+		 *
+		 * @tags servers
+		 * @name GetComposeFile
+		 * @summary Get Compose File
+		 * @request GET:/api/servers/{server_id}/compose/file
+		 * @secure
+		 */
+		getComposeFile: (serverId: string, params: RequestParams = {}) =>
+			this.request<ComposeFile, HTTPValidationError>({
+				path: `/api/servers/${serverId}/compose/file`,
+				method: 'GET',
+				secure: true,
+				format: 'json',
+				...params
+			}),
+
+		/**
+		 * @description Replace the compose file; `docker compose config` must accept it. The old one is kept as .gamefleet-bak.
+		 *
+		 * @tags servers
+		 * @name UpdateComposeFile
+		 * @summary Update Compose File
+		 * @request PUT:/api/servers/{server_id}/compose/file
+		 * @secure
+		 */
+		updateComposeFile: (serverId: string, data: ComposeFileUpdate, params: RequestParams = {}) =>
+			this.request<ComposeFile, HTTPValidationError>({
+				path: `/api/servers/${serverId}/compose/file`,
+				method: 'PUT',
+				body: data,
+				secure: true,
+				type: ContentType.Json,
+				format: 'json',
+				...params
+			}),
+
+		/**
+		 * @description `docker compose up -d` for the server: applies the compose file and starts the container.
+		 *
+		 * @tags servers
+		 * @name RecreateServer
+		 * @summary Recreate Server
+		 * @request POST:/api/servers/{server_id}/compose/recreate
+		 * @secure
+		 */
+		recreateServer: (serverId: string, data: RecreateRequest, params: RequestParams = {}) =>
+			this.request<HostStats, PowerConflictDetail | HTTPValidationError>({
+				path: `/api/servers/${serverId}/compose/recreate`,
+				method: 'POST',
 				body: data,
 				secure: true,
 				type: ContentType.Json,

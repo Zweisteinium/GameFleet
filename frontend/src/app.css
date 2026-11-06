@@ -245,8 +245,10 @@
 		transform: none;
 	}
 }
+/* backwards, not both: a transform kept after the animation would make `position: fixed` children (modals)
+   position against this element instead of the viewport. */
 .rise {
-	animation: rise 0.2s ease-out both;
+	animation: rise 0.2s ease-out backwards;
 }
 
 /* Minecraft MOTD rendering inside cards */

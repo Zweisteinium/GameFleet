@@ -2,11 +2,11 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, type Snippet } from 'svelte';
 	import { api } from '$lib/api/ApiService';
-	import type { GameServerPublic, PowerConflictDetail } from '$lib/api/Api';
-	import { gameArtUrl, gameLabel, isMinecraft } from '$lib/games';
-	import { capabilities, overviewTiles, playerInitial, playersEmptyMessage } from '$lib/gameinfo';
+	import type { GameServerPublic, HostStats, PowerConflictDetail } from '$lib/api/Api';
+	import { gameArtUrl, gameLabel } from '$lib/games';
+	import { setServerPage } from '$lib/serverPage.svelte';
 	import {
 		live,
 		restoreLive,
@@ -16,21 +16,17 @@
 	} from '$lib/live.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import StatCard from '$lib/components/StatCard.svelte';
-	import MinecraftMOTD from '$lib/components/MinecraftMOTD.svelte';
-	import GameDetails from '$lib/components/GameDetails.svelte';
 	import ServerForm from '$lib/components/ServerForm.svelte';
 	import ServerProperties from '$lib/components/ServerProperties.svelte';
 	import HostPanel from '$lib/components/HostPanel.svelte';
-	import BackupPanel from '$lib/components/BackupPanel.svelte';
-	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 	import { loggedIn } from '$lib/auth.svelte';
 	import { confirmDialog } from '$lib/confirm.svelte';
 	import GameArt from '$lib/components/GameArt.svelte';
-	import PlayersBar from '$lib/components/PlayersBar.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+
+	let { children }: { children: Snippet } = $props();
 
 	const REFRESH_INTERVAL_MS = 30000;
 
@@ -62,8 +58,35 @@
 			return 'Link';
 		}
 	}
-	const tiles = $derived(liveInfo && server ? overviewTiles(liveInfo, server.game) : []);
-	const caps = $derived(liveInfo ? capabilities(liveInfo) : null);
+	const running = $derived(hostStats?.state === 'running');
+	const admin = $derived(isLocal && loggedIn());
+
+	type TabRoute =
+		| '/server/[id]'
+		| '/server/[id]/settings'
+		| '/server/[id]/mods'
+		| '/server/[id]/backups'
+		| '/server/[id]/files';
+	// Tabs below the header; a server with nothing but live data gets none.
+	const tabs = $derived.by(() => {
+		const list: { route: TabRoute; label: string; icon: string; count?: number }[] = [
+			{ route: '/server/[id]', label: 'Overview', icon: 'activity' }
+		];
+		if (admin) list.push({ route: '/server/[id]/settings', label: 'Settings', icon: 'sliders' });
+		if (liveInfo?.mods?.length)
+			list.push({
+				route: '/server/[id]/mods',
+				label: 'Mods',
+				icon: 'layers',
+				count: liveInfo.mods.length
+			});
+		if (admin) {
+			list.push({ route: '/server/[id]/backups', label: 'Backups', icon: 'archive' });
+			list.push({ route: '/server/[id]/files', label: 'Files', icon: 'file-text' });
+		}
+		return list;
+	});
+	const activeTab = $derived(page.route.id);
 
 	async function fetchServerData() {
 		if (!serverId) {
@@ -88,10 +111,11 @@
 		await Promise.all([refreshServer(serverId), isLocal ? refreshHostStats(serverId) : null]);
 	}
 
-	async function power(action: 'start' | 'stop' | 'restart') {
+	/** Run a container action; a 409 with GameFleet servers holding the port offers to stop those first. */
+	async function withPortCheck(run: (stopConflicting: boolean) => Promise<HostStats>) {
 		if (!server) return;
 		try {
-			live.host[server.id] = (await api.serverId.powerServer(server.id, { action })).data;
+			live.host[server.id] = await run(false);
 		} catch (err) {
 			// 409: another container holds this server's host port (instances of one game usually share it).
 			const detail = (err as { error?: { detail?: PowerConflictDetail } })?.error?.detail;
@@ -106,12 +130,23 @@
 				tone: 'danger'
 			});
 			if (!stopOthers) return;
-			live.host[server.id] = (
-				await api.serverId.powerServer(server.id, { action, stop_conflicting: true })
-			).data;
+			live.host[server.id] = await run(true);
 			for (const holder of holders) if (holder.server_id) refreshServer(holder.server_id);
 		}
 		settle();
+	}
+
+	function power(action: 'start' | 'stop' | 'restart') {
+		return withPortCheck(
+			async (stop) =>
+				(await api.serverId.powerServer(serverId, { action, stop_conflicting: stop })).data
+		);
+	}
+
+	function recreate() {
+		return withPortCheck(
+			async (stop) => (await api.serverId.recreateServer(serverId, { stop_conflicting: stop })).data
+		);
 	}
 
 	/** Re-query a few times after the container changed: games need a while to come up or go down. */
@@ -155,6 +190,31 @@
 		await refreshLiveInfo();
 	}
 
+	setServerPage({
+		get server() {
+			return server!;
+		},
+		get liveInfo() {
+			return liveInfo;
+		},
+		get hostStats() {
+			return hostStats;
+		},
+		get isLocal() {
+			return isLocal;
+		},
+		get running() {
+			return running;
+		},
+		get refreshing() {
+			return refreshing;
+		},
+		power,
+		recreate,
+		refresh: refreshLiveInfo,
+		settle
+	});
+
 	onMount(() => {
 		restoreLive();
 		fetchServerData();
@@ -179,9 +239,9 @@
 	<div class="py-24"><LoadingSpinner size="lg" message="Loading server…" /></div>
 {:else if error && !server}
 	<div class="card mx-auto mt-6 max-w-md px-8 py-14 text-center">
-		<Icon name="alert" size={24} class="text-bad mx-auto mb-4" />
+		<Icon name="alert" size={24} class="mx-auto mb-4 text-bad" />
 		<h2 class="text-lg font-semibold">Something went wrong</h2>
-		<p class="text-ink-2 mt-1 mb-6 text-sm">{error}</p>
+		<p class="mt-1 mb-6 text-sm text-ink-2">{error}</p>
 		<a href={resolve('/main')} class="btn-primary">Back to dashboard</a>
 	</div>
 {:else if server}
@@ -225,7 +285,7 @@
 						{#if !liveInfo}
 							<Skeleton class="mt-2 h-4 w-56" />
 						{:else if liveInfo.server_name && liveInfo.server_name !== server.name}
-							<p class="text-ink-2 mt-1 truncate text-sm">“{liveInfo.server_name}”</p>
+							<p class="mt-1 truncate text-sm text-ink-2">“{liveInfo.server_name}”</p>
 						{/if}
 						<div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
 							<span class="meta font-mono"
@@ -241,18 +301,24 @@
 						{#if server.modpack_name}
 							<div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
 								{#if server.modpack_icon}
-									<img src={server.modpack_icon} alt="" class="h-6 w-6 rounded-[5px]" loading="lazy" />
+									<img
+										src={server.modpack_icon}
+										alt=""
+										class="h-6 w-6 rounded-[5px]"
+										loading="lazy"
+									/>
 								{:else}
 									<Icon name="puzzle" size={16} class="text-ink-3" />
 								{/if}
 								<span class="font-medium">{server.modpack_name}</span>
-								{#if server.modpack_version}<span class="text-ink-3">{server.modpack_version}</span>{/if}
+								{#if server.modpack_version}<span class="text-ink-3">{server.modpack_version}</span
+									>{/if}
 								{#if server.modpack_url}
 									<a
 										href={server.modpack_url}
 										target="_blank"
 										rel="external noreferrer"
-										class="text-accent inline-flex items-center gap-1 text-xs font-medium hover:underline"
+										class="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
 									>
 										{MODPACK_SITES[server.modpack_source ?? ''] ?? modpackHost(server.modpack_url)}
 										<Icon name="external-link" size={12} />
@@ -301,181 +367,36 @@
 
 		{#if isLocal}
 			<HostPanel {server} stats={hostStats} onPower={power} />
-			{#if loggedIn()}
-				<SettingsPanel {server} running={hostStats?.state === 'running'} onRestart={() => power('restart')} />
-				<BackupPanel
-					{server}
-					running={hostStats?.state === 'running'}
-					onChanged={() => {
-						refreshLiveInfo();
-						settle();
-					}}
-				/>
-			{/if}
 		{/if}
 
-		{#if !liveInfo}
-			<!-- Live data placeholders -->
-			<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-				{#each [0, 1, 2, 3] as i (i)}
-					<div class="card flex items-center gap-3 p-4">
-						<Skeleton class="h-9 w-9 rounded-[7px]" />
-						<div class="flex-1 space-y-2">
-							<Skeleton class="h-3 w-16" /><Skeleton class="h-5 w-24" />
-						</div>
-					</div>
-				{/each}
-			</div>
-			<div class="grid gap-5 lg:grid-cols-5">
-				<div class="card space-y-3 p-5 lg:col-span-3">
-					<Skeleton class="h-5 w-40" /><Skeleton class="h-3 w-24" /><Skeleton class="h-12 w-full" />
-				</div>
-				<div class="card space-y-3 p-5 lg:col-span-2">
-					<Skeleton class="h-5 w-32" /><Skeleton class="h-9 w-full" /><Skeleton class="h-9 w-full" />
-				</div>
-			</div>
-		{:else}
-			{#if liveInfo.status === 'starting'}
-				<div class="notice tone-accent items-center py-2.5">
-					<Icon name="refresh" size={16} class="shrink-0 animate-spin" />
-					<p>The server is starting. Live data appears once it answers.</p>
-				</div>
-			{:else if liveInfo.error_message}
-				<div class="notice tone-warn py-2.5">
-					<Icon name="alert" size={16} class="mt-0.5 shrink-0" />
-					<div>
-						<p class="font-medium">Could not read live data</p>
-						<p class="mt-0.5 text-xs">{liveInfo.error_message}</p>
-					</div>
-				</div>
-			{/if}
-
-			<!-- Overview: player count plus three headline tiles chosen per game -->
-			<div class="card divide-line grid grid-cols-2 divide-y sm:divide-y-0 sm:divide-x md:grid-cols-4">
-				<div class="flex items-center gap-3 px-4 py-3">
-					<span
-						class="pill tone-accent grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-control)] px-0"
-						><Icon name="users" size={17} /></span
+		{#if tabs.length > 1}
+			<nav
+				class="-mb-1 flex gap-1 overflow-x-auto border-b border-line"
+				aria-label="Server sections"
+			>
+				{#each tabs as tab (tab.route)}
+					<a
+						href={resolve(tab.route, { id: serverId })}
+						class="-mb-px flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors {activeTab ===
+						tab.route
+							? 'border-accent text-ink'
+							: 'border-transparent text-ink-2 hover:text-ink'}"
+						aria-current={activeTab === tab.route ? 'page' : undefined}
+						data-sveltekit-noscroll
 					>
-					<div class="min-w-0 flex-1">
-						<p class="caption">Players</p>
-						{#if liveInfo.players_online != null}
-							<PlayersBar online={liveInfo.players_online} max={liveInfo.players_max} />
-						{:else}
-							<p class="text-lg font-semibold">—</p>
-						{/if}
-					</div>
-				</div>
-				{#each tiles as tile (tile.key)}
-					<StatCard
-						icon={tile.icon}
-						title={tile.title}
-						value={tile.value ?? '—'}
-						subtitle={tile.value ? tile.subtitle : undefined}
-						tone={tile.value ? (tile.tone ?? 'neutral') : 'neutral'}
-					/>
+						<Icon
+							name={tab.icon}
+							size={15}
+							class={activeTab === tab.route ? 'text-accent' : 'text-ink-3'}
+						/>
+						{tab.label}
+						{#if tab.count}<span class="text-xs font-normal text-ink-3">{tab.count}</span>{/if}
+					</a>
 				{/each}
-			</div>
-
-			<div class="grid gap-5 lg:grid-cols-5">
-				<!-- Info -->
-				<section class="card p-5 lg:col-span-3">
-					<h3 class="section-title mb-4">
-						<Icon name="info" size={16} class="text-ink-3" />Server information
-					</h3>
-					<dl class="space-y-4">
-						{#if liveInfo.description}
-							<div>
-								<dt class="label">Description</dt>
-								<dd class="tile text-sm">
-									{#if isMinecraft(server.game)}
-										<MinecraftMOTD motd={liveInfo.description} />
-									{:else}
-										{liveInfo.description}
-									{/if}
-								</dd>
-							</div>
-						{/if}
-						{#if liveInfo.game_mode && liveInfo.map_name}
-							<div>
-								<dt class="label">Game mode</dt>
-								<dd class="text-sm font-medium">{liveInfo.game_mode}</dd>
-							</div>
-						{/if}
-						{#if !liveInfo.description && !(liveInfo.game_mode && liveInfo.map_name)}
-							<p class="text-ink-3 text-sm">
-								{caps?.description
-									? 'This server does not publish a description.'
-									: 'This game does not publish a description.'}
-							</p>
-						{/if}
-					</dl>
-				</section>
-
-				<!-- Players -->
-				<section class="card p-5 lg:col-span-2">
-					<h3 class="section-title mb-4">
-						<Icon name="users" size={16} class="text-ink-3" />
-						Players online
-						{#if liveInfo.player_list?.length}<span class="text-ink-3 text-sm font-normal"
-								>({liveInfo.player_list.length})</span
-							>{/if}
-					</h3>
-					{#if liveInfo.player_list && liveInfo.player_list.length > 0}
-						<ul class="max-h-80 space-y-1.5 overflow-y-auto pr-1">
-							{#each liveInfo.player_list as player, index (index)}
-								<li class="tile flex items-center gap-3">
-									<span
-										class="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent"
-									>
-										{playerInitial(player)}
-									</span>
-									<span class="truncate text-sm">{player}</span>
-								</li>
-							{/each}
-						</ul>
-					{:else}
-						<p class="text-ink-3 py-6 text-center text-sm">{playersEmptyMessage(liveInfo)}</p>
-					{/if}
-				</section>
-			</div>
-
-			<GameDetails info={liveInfo} />
-
-			{#if liveInfo.mods && liveInfo.mods.length > 0}
-				<section class="card p-5">
-					<h3 class="section-title mb-4">
-						<Icon name="layers" size={16} class="text-ink-3" />Mods
-						<span class="text-ink-3 text-sm font-normal">({liveInfo.mods.length})</span>
-					</h3>
-					<ul class="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
-						{#each liveInfo.mods as mod, index (index)}
-							<li class="tile">
-								{#if mod.url}
-									<a
-										href={mod.url}
-										target="_blank"
-										rel="noreferrer"
-										class="flex items-center gap-1.5 truncate text-sm font-medium hover:text-accent"
-									>
-										{mod.name || `Mod ${mod.id}`}<Icon
-											name="external-link"
-											size={12}
-											class="text-ink-3"
-										/>
-									</a>
-								{:else}
-									<p class="truncate text-sm font-medium">
-										{mod.name || (mod.id ? `Mod ${mod.id}` : 'Unknown mod')}
-									</p>
-								{/if}
-								{#if mod.version}<p class="hint">v{mod.version}</p>{/if}
-							</li>
-						{/each}
-					</ul>
-				</section>
-			{/if}
+			</nav>
 		{/if}
+
+		{@render children()}
 	</div>
 {/if}
 

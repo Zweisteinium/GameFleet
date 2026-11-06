@@ -274,18 +274,19 @@
 		</div>
 
 		{#if server.world_path || server.data_path || stats?.compose_dir}
-			<p class="text-ink-3 mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+			<!-- Icons sit 1px low to line up with the x-height of the text, not its line box. -->
+			<p class="text-ink-3 mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
 				{#if stats?.compose_dir}<span class="meta" title="Compose project {stats.compose_project ?? ''}"
-						><Icon name="box" size={13} />compose
-						<span class="font-mono">{stats.compose_dir}</span></span
+						><Icon name="box" size={13} class="translate-y-px" /><span>compose</span>
+						<span class="font-mono text-ink-2">{stats.compose_dir}</span></span
 					>{/if}
 				{#if server.data_path}<span class="meta"
-						><Icon name="folder" size={13} />data <span class="font-mono">{server.data_path}</span
-						></span
+						><Icon name="folder" size={13} class="translate-y-px" /><span>data</span>
+						<span class="font-mono text-ink-2">{server.data_path}</span></span
 					>{/if}
 				{#if server.world_path}<span class="meta"
-						><Icon name="database" size={13} />world <span class="font-mono">{server.world_path}</span
-						></span
+						><Icon name="database" size={13} class="translate-y-px" /><span>world</span>
+						<span class="font-mono text-ink-2">{server.world_path}</span></span
 					>{/if}
 			</p>
 		{/if}

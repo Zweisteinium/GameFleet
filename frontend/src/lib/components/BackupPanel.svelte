@@ -53,6 +53,11 @@
 			([a], [b]) => Number(a.startsWith('Copies')) - Number(b.startsWith('Copies'))
 		);
 	});
+	// Hundreds of backups bury the page: only the newest one is shown until asked for all.
+	let showAll = $state(false);
+	const newest = $derived(
+		backups.reduce<Backup | null>((a, b) => (!a || b.created > a.created ? b : a), null)
+	);
 	const busy = $derived((job != null && job.finished_at == null) || uploadProgress != null);
 	const modpack = $derived(
 		server.modpack_name
@@ -274,43 +279,37 @@
 				No backups found. The server's own backups are listed here once it has written some.
 			</p>
 		{:else}
-			<div class="space-y-4">
-				{#each groups as [folder, items] (folder)}
-					<div>
-						<p class="caption mb-1.5 flex items-center gap-1.5">
-							<Icon name="folder" size={12} />
-							{#if folder.startsWith('Copies')}{folder}{:else}<span class="font-mono normal-case"
-									>{folder}</span
-								>{/if}
-							<span class="text-ink-3 font-normal">({items.length})</span>
-						</p>
-						<ul class="divide-line border-line divide-y rounded-[var(--radius-control)] border">
-							{#each items as backup (backup.path)}
-								<li class="flex items-center gap-3 px-3 py-2">
-									<div class="min-w-0 flex-1">
-										<p class="truncate font-mono text-sm" title={backup.path}>{backup.file}</p>
-										<p class="hint">{when(backup.created)} · {formatBytes(backup.size)}</p>
-									</div>
-									<button
-										class="btn-outline btn-sm"
-										title="Restore this backup"
-										disabled={busy}
-										onclick={() => open({ backup })}
-									>
-										<Icon name="history" size={14} />Restore
-									</button>
-									<button
-										class="btn-ghost btn-icon h-8 w-8"
-										title="Download"
-										aria-label="Download {backup.file}"
-										onclick={() => download(backup)}><Icon name="download" size={15} /></button
-									>
-								</li>
-							{/each}
-						</ul>
-					</div>
-				{/each}
-			</div>
+			{#if !showAll && newest}
+				<p class="caption mb-1.5">Newest</p>
+				<ul class="border-line rounded-[var(--radius-control)] border">
+					{@render row(newest, true)}
+				</ul>
+			{:else}
+				<div class="space-y-4">
+					{#each groups as [folder, items] (folder)}
+						<div>
+							<p class="caption mb-1.5 flex items-center gap-1.5">
+								<Icon name="folder" size={12} />
+								{#if folder.startsWith('Copies')}{folder}{:else}<span class="font-mono normal-case"
+										>{folder}</span
+									>{/if}
+								<span class="text-ink-3 font-normal">({items.length})</span>
+							</p>
+							<ul class="divide-line border-line divide-y rounded-[var(--radius-control)] border">
+								{#each items as backup (backup.path)}
+									{@render row(backup, false)}
+								{/each}
+							</ul>
+						</div>
+					{/each}
+				</div>
+			{/if}
+			{#if backups.length > 1}
+				<button class="btn-ghost btn-sm mt-2 -ml-2" onclick={() => (showAll = !showAll)}>
+					<Icon name={showAll ? 'chevron-up' : 'chevron-down'} size={14} />
+					{showAll ? 'Show only the newest' : `Show all (${backups.length})`}
+				</button>
+			{/if}
 		{/if}
 		{#if info.locations?.length}
 			<p class="hint mt-3">
@@ -319,6 +318,34 @@
 		{/if}
 	{/if}
 </section>
+
+{#snippet row(backup: Backup, withFolder: boolean)}
+	<li class="flex items-center gap-3 px-3 py-2">
+		<div class="min-w-0 flex-1">
+			<p class="truncate font-mono text-sm" title={backup.path}>{backup.file}</p>
+			<p class="hint">
+				{when(backup.created)} · {formatBytes(backup.size)}{#if withFolder}
+					· <span class="font-mono"
+						>{backup.gamefleet ? 'copy kept before a restore' : backup.folder}</span
+					>{/if}
+			</p>
+		</div>
+		<button
+			class="btn-outline btn-sm"
+			title="Restore this backup"
+			disabled={busy}
+			onclick={() => open({ backup })}
+		>
+			<Icon name="history" size={14} />Restore
+		</button>
+		<button
+			class="btn-ghost btn-icon h-8 w-8"
+			title="Download"
+			aria-label="Download {backup.file}"
+			onclick={() => download(backup)}><Icon name="download" size={15} /></button
+		>
+	</li>
+{/snippet}
 
 {#if pending && info}
 	<Modal title="Restore backup" onClose={() => uploadProgress == null && (pending = null)}>
