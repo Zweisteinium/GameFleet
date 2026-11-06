@@ -108,3 +108,15 @@ def test_interpolated_values_are_detected():
 def test_check_patch_catches_collateral_changes():
     with pytest.raises(ComposeError):
         check_patch(GTNH, GTNH.replace("gtnh-server", "other"), "gtnh", {})
+
+
+def test_specs_for_a_server_loaded_from_the_database():
+    # The database hands the game over as a plain string, not the enum.
+    from gamefleet_backend.db.models.game_server import GameServer
+    from gamefleet_backend.services.compose_service import specs_for
+    server = GameServer(name="x", game="minecraft", address="x", port=1)
+    envs = [o.env for o in specs_for(server, "itzg/minecraft-server:java25")]
+    assert envs[0] == "MOTD" and "MEMORY" in envs and "TYPE" not in envs
+    assert [o.env for o in specs_for(GameServer(name="v", game="valheim", address="x", port=1),
+                                     "ghcr.io/lloesche/valheim-server:latest")] == [
+        "SERVER_NAME", "SERVER_PUBLIC", "BACKUPS", "UPDATE_CRON"]

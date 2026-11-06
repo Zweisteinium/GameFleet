@@ -25,6 +25,7 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from gamefleet_backend.db.models.game_server import GameServer
 from gamefleet_backend.models.compose_info import ComposeFile, ComposeInfo, ComposeSetting
 from gamefleet_backend.models.config_info import SettingScalar, SettingSpec
+from gamefleet_backend.models.game_server_type import GameServerType
 from gamefleet_backend.services.config_service import LAYOUTS, ConfigError, config_service
 from gamefleet_backend.services.docker_service import docker_service
 from gamefleet_backend.services.template_service import templates
@@ -397,7 +398,7 @@ class ComposeService:
             settings.append(ComposeSetting(
                 **spec.model_dump(), env=env_name, value=_typed(spec, value), readonly=readonly,
                 file_value=file_values.get(file_key) if file_key else None,
-                multiline=env_name in MOTD_VARS, motd=env_name in MOTD_VARS and server.game.value == "minecraft",
+                multiline=env_name in MOTD_VARS, motd=env_name in MOTD_VARS and server.game == GameServerType.minecraft,
             ))
         return ComposeInfo(supported=True, file=project.file, project=project.name, service=project.service,
                            settings=settings, pending=await self.pending(project, attrs, resolved))
