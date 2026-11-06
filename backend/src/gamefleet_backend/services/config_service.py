@@ -152,6 +152,7 @@ _UNICODE = re.compile(r"\\u([0-9a-fA-F]{4})")
 def _unescape(value: str) -> str:
     """Java .properties value: \\uXXXX and the escaped separators."""
     value = _UNICODE.sub(lambda m: chr(int(m.group(1), 16)), value)
+    value = value.encode("utf-16", "surrogatepass").decode("utf-16", "replace")  # join surrogate pairs
     return re.sub(r"\\(.)", lambda m: {"n": "\n", "t": "\t", "r": "\r"}.get(m.group(1), m.group(1)), value)
 
 
@@ -163,6 +164,9 @@ def _escape(value: str) -> str:
             out.append("\\" + ch)
         elif ch == "\n":
             out.append("\\n")
+        elif ord(ch) > 0xFFFF:  # Java reads \u escapes as UTF-16: a surrogate pair
+            high, low = divmod(ord(ch) - 0x10000, 0x400)
+            out.append(f"\\u{0xD800 + high:04x}\\u{0xDC00 + low:04x}")
         elif ord(ch) > 126 or ord(ch) < 32:
             out.append(f"\\u{ord(ch):04x}")
         else:
@@ -375,6 +379,9 @@ class ConfigService:
         for key in coerced:
             if current[key].locked and coerced[key] != current[key].value:
                 raise ConfigError(f"{specs[key].label} cannot change: {current[key].locked}")
+            if current[key].env_override is not None and coerced[key] != current[key].value:
+                # The image writes it from the container environment on every start: the change would be lost.
+                raise ConfigError(f"{specs[key].label} is set by the container environment; change it there.")
         if target.layout.format == "properties":
             changes = {key: ("true" if v is True else "false" if v is False else str(v)) for key, v in coerced.items()}
             new_text = write_properties(text, changes)

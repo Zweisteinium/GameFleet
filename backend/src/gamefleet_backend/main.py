@@ -9,6 +9,7 @@ from .api import auth as auth_api, create, docker, games, servers, settings as s
 from .auth import current_user, log_startup_state
 from .db.session import init_db
 from .services.backup_service import clean_temp_files
+from .services.docker_service import docker_service
 from .services.docker_discovery_service import DISCOVERY_INTERVAL, discovery_loop
 from .settings import DEV
 
@@ -24,6 +25,11 @@ async def lifespan(app: FastAPI):
     log_startup_state()
     await init_db()
     clean_temp_files()
+    try:
+        if removed := await docker_service.remove_stale_helpers():
+            logging.getLogger(__name__).info("Removed %d helper container(s) left by an earlier run", removed)
+    except Exception as exc:  # Docker unavailable or not mounted: nothing to clean
+        logging.getLogger(__name__).debug("No helper cleanup: %s", exc)
     task = asyncio.create_task(discovery_loop()) if DISCOVERY_INTERVAL > 0 else None
     yield
     if task:

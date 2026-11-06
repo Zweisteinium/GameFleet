@@ -11,6 +11,7 @@ import os
 import re
 import tarfile
 import time
+import uuid
 from typing import Any, AsyncIterator, Callable, Iterable, Iterator, Optional
 
 import docker
@@ -312,17 +313,24 @@ class DockerService:
         same tar and chown are there; the entrypoint is replaced, so the game never starts."""
         def run(c: docker.DockerClient) -> str:
             attrs = c.api.inspect_container(name)
-            helper = HELPER_PREFIX + name
-            try:
-                c.api.remove_container(helper, force=True)  # left behind by an interrupted run
-            except docker.errors.NotFound:
-                pass
+            # Unique per use: a settings read must not replace the helper a running restore works in.
+            helper = f"{HELPER_PREFIX}{name}-{uuid.uuid4().hex[:8]}"
             c.api.create_container(
                 image=attrs["Image"], entrypoint=["sleep"], command=["86400"], user="root", name=helper,
                 host_config=c.api.create_host_config(volumes_from=[name], network_mode="none"),
             )
             c.api.start(helper)
             return helper
+        return await self._call(run)
+
+    async def remove_stale_helpers(self) -> int:
+        """Remove helpers left behind by a backend that stopped mid-job; call before any job runs."""
+        def run(c: docker.DockerClient) -> int:
+            stale = [x["Id"] for x in c.api.containers(all=True, filters={"name": HELPER_PREFIX})
+                     if any(n.lstrip("/").startswith(HELPER_PREFIX) for n in x.get("Names") or [])]
+            for container in stale:
+                c.api.remove_container(container, force=True)
+            return len(stale)
         return await self._call(run)
 
     async def remove_container(self, name: str) -> None:

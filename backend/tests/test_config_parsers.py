@@ -70,3 +70,10 @@ def test_from_text_reads_missing_and_broken_values_as_unknown():
     assert _from_text(spec("int"), "abc") is None
     assert _from_text(spec("bool"), "TRUE") is True
     assert _from_text(spec("str"), "x") == "x"
+
+
+def test_properties_round_trip_outside_the_bmp():
+    from gamefleet_backend.services.config_service import read_properties, write_properties
+    text = write_properties("motd=x\n", {"motd": "Hi \U0001F600 ä"})
+    assert "\\ud83d\\ude00" in text
+    assert read_properties(text)["motd"] == "Hi \U0001F600 ä"

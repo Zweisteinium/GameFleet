@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import tempfile
 from typing import Literal, Sequence
 from urllib.parse import quote
@@ -232,7 +233,19 @@ async def delete_server(
     if server.source == "docker" and server.container_name:
         if remove_container:
             try:
+                attrs = await docker_service.inspect(server.container_name)
+                # Data in an anonymous volume would be orphaned and lost to the next `docker volume prune`.
+                anonymous = [m["Destination"] for m in attrs.get("Mounts") or []
+                             if m.get("Type") == "volume" and re.fullmatch(r"[0-9a-f]{64}", m.get("Name") or "")]
+                if anonymous:
+                    raise HTTPException(status_code=409, detail=(
+                        f"{server.container_name} keeps {', '.join(anonymous)} in an anonymous volume that would be "
+                        "orphaned. Remove the container by hand, or delete the server without removing it."))
+                if (attrs.get("State") or {}).get("Running"):
+                    await docker_service.power(server.container_name, "stop")  # let the game save first
                 await docker_service.remove_container(server.container_name)
+            except docker.errors.NotFound:
+                pass  # already gone
             except DockerUnavailable as exc:
                 raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
             except docker.errors.APIError as exc:
