@@ -1,0 +1,43 @@
+# Satisfactory dedicated server on wolveix/satisfactory-server (https://github.com/wolveix/satisfactory-server).
+id: satisfactory
+game: satisfactory
+label: Satisfactory
+description: Dedicated server. Claim it in the in-game Server Manager after the first start.
+image: wolveix/satisfactory-server
+tags:
+  - tag: v1
+    label: v1
+    hint: The newest 1.x image release; the game itself updates on start
+folder: satisfactory
+data_path: /config
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: game-tcp
+    port: 7777
+    follows: true
+  - name: messaging
+    port: 8888
+port_env: SERVERGAMEPORT
+settings_env:
+  PUID: owner_uid
+  PGID: owner_gid
+  TZ: timezone
+stop_grace: 60
+ready_hint: The first start downloads the game files, about 10 GB. Plan for 8 GB of RAM.
+variables:
+  - env: MAXPLAYERS
+    label: Max players
+    type: number
+    default: "4"
+  - env: AUTOSAVENUM
+    label: Autosaves kept
+    type: number
+    default: "5"
+    advanced: true
+  - env: SKIPUPDATE
+    label: Skip game updates on start
+    type: boolean
+    default: "false"
+    advanced: true

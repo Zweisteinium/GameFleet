@@ -1,0 +1,36 @@
+# Factorio headless server on factoriotools/factorio (https://github.com/factoriotools/factorio-docker).
+id: factorio
+game: factorio
+label: Factorio
+description: Headless server. A new map is generated on the first start; later starts load the newest save in data/saves.
+image: factoriotools/factorio
+tags:
+  - tag: stable
+    label: Stable
+    hint: The newest stable Factorio release
+  - tag: latest
+    label: Experimental
+    hint: The newest release, including experimental ones
+folder: factorio
+data_path: /factorio
+ports:
+  - name: game
+    port: 34197
+    protocol: udp
+  - name: rcon
+    port: 27015
+    publish: false
+port_env: PORT
+settings_env:
+  PUID: owner_uid
+  PGID: owner_gid
+  TZ: timezone
+stop_grace: 30
+ready_hint: The RCON password the image generates is in data/config/rconpw.
+variables:
+  - env: UPDATE_MODS_ON_START
+    label: Update mods on start
+    type: boolean
+    default: "false"
+    help: Needs your factorio.com name and token (USERNAME, TOKEN) in the compose file.
+    advanced: true

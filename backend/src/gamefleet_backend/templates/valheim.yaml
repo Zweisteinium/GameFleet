@@ -1,0 +1,58 @@
+# Valheim dedicated server on lloesche/valheim-server (https://github.com/lloesche/valheim-server-docker).
+id: valheim
+game: valheim
+label: Valheim
+description: Dedicated server with its own world backups and automatic game updates (about 1 GB on the first start).
+image: lloesche/valheim-server
+tags:
+  - tag: latest
+    label: Latest
+    hint: The image only publishes latest; it updates the game itself
+folder: valheim
+data_path: /config
+extra_volumes:
+  server: /opt/valheim
+ports:
+  - name: game
+    port: 2456
+    protocol: udp
+  - name: query
+    port: 2457
+    protocol: udp
+    follows: true
+port_env: SERVER_PORT
+settings_env:
+  PUID: owner_uid
+  PGID: owner_gid
+  TZ: timezone
+stop_grace: 120
+ready_hint: The first start downloads the game files, about 1 GB.
+variables:
+  - env: SERVER_NAME
+    label: Server name
+    default: My Valheim Server
+    required: true
+  - env: WORLD_NAME
+    label: World name
+    default: Dedicated
+    required: true
+    pattern: '^[A-Za-z0-9_-]{1,64}$'
+  - env: SERVER_PASS
+    label: Join password
+    type: secret
+    required: true
+    help: Players need it to join. At least 5 characters, and not part of the server name.
+  - env: SERVER_PUBLIC
+    label: List in the server browser
+    type: boolean
+    default: "false"
+  - env: BACKUPS
+    label: World backups
+    type: boolean
+    default: "true"
+    advanced: true
+  - env: UPDATE_CRON
+    label: Update check
+    default: "*/15 * * * *"
+    help: Cron schedule; the server restarts for an update when nobody is online.
+    advanced: true

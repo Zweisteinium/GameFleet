@@ -1,0 +1,79 @@
+# Minecraft Bedrock Edition on itzg/minecraft-bedrock-server (https://github.com/itzg/docker-minecraft-bedrock-server).
+id: minecraft-bedrock
+game: minecraft_bedrock
+label: Minecraft Bedrock
+description: For phones, consoles and Windows clients. The server is downloaded on the first start.
+image: itzg/minecraft-bedrock-server
+tags:
+  - tag: stable
+    label: Stable
+    hint: The image's latest release; the game version is chosen below
+folder: minecraft-bedrock
+data_path: /data
+eula:
+  env: EULA
+  label: I accept the Minecraft EULA
+  url: https://aka.ms/MinecraftEULA
+ports:
+  - name: game
+    port: 19132
+    protocol: udp
+port_env: SERVER_PORT
+environment:
+  # BDS 1.26.50+ defaults to NetherNet (WebRTC: TCP signaling plus per-client UDP ports announced with the
+  # container's address), which does not work behind Docker's port mapping without more setup. RakNet is the
+  # classic single UDP port, and what GameFleet's status query speaks.
+  TRANSPORT: raknet
+settings_env:
+  UID: owner_uid
+  GID: owner_gid
+  TZ: timezone
+tty: true
+stdin_open: true
+stop_grace: 60
+variables:
+  - env: VERSION
+    label: Bedrock version
+    default: LATEST
+    pattern: '^(LATEST|PREVIEW|[0-9][0-9.]*)$'
+    help: LATEST, PREVIEW or a version such as 1.21.120.4.
+  - env: SERVER_NAME
+    label: Server name
+    default: Dedicated Server
+  - env: GAMEMODE
+    label: Game mode
+    type: select
+    default: survival
+    options:
+      - {value: survival, label: Survival}
+      - {value: creative, label: Creative}
+      - {value: adventure, label: Adventure}
+  - env: DIFFICULTY
+    label: Difficulty
+    type: select
+    default: easy
+    advanced: true
+    options:
+      - {value: peaceful, label: Peaceful}
+      - {value: easy, label: Easy}
+      - {value: normal, label: Normal}
+      - {value: hard, label: Hard}
+  - env: LEVEL_NAME
+    label: World name
+    default: Bedrock level
+    advanced: true
+  - env: MAX_PLAYERS
+    label: Max players
+    type: number
+    default: "10"
+    advanced: true
+  - env: ONLINE_MODE
+    label: Require Xbox accounts
+    type: boolean
+    default: "true"
+    advanced: true
+  - env: ALLOW_LIST_USERS
+    label: Allowed players
+    placeholder: gamertag1, gamertag2
+    help: Empty lets everyone join.
+    advanced: true

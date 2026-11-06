@@ -127,3 +127,66 @@ def test_port_tag_cpu_and_advanced_values():
     assert svc["environment"]["DIFFICULTY"] == "hard" and svc["environment"]["MOTD"] == "Hi"
     with pytest.raises(TemplateError, match="image tag"):
         render(get_template("minecraft"), request(tag="java17 --privileged"), SETTINGS)
+
+
+def svc_of(rendered) -> dict:
+    return next(iter(yaml.safe_load(rendered.compose)["services"].values()))
+
+
+VALHEIM = dict(template="valheim", name="Midgard", slug="midgard", values={"SERVER_PASS": "vikings"})
+
+
+@pytest.mark.parametrize("template_id", ["minecraft-bedrock", "factorio", "satisfactory"])
+def test_other_games_render_with_defaults(template_id):
+    rendered = render(get_template(template_id), request(template=template_id), SETTINGS)
+    svc = svc_of(rendered)
+    assert rendered.folder == f"/opt/{get_template(template_id).folder}/skyblock"
+    assert not svc["image"].endswith(":latest")
+    assert svc["environment"]["TZ"] == "Europe/Berlin"
+    assert rendered.volume_dirs == ["data"]
+
+
+def test_bedrock_uses_raknet_on_udp():
+    svc = svc_of(render(get_template("minecraft-bedrock"), request(template="minecraft-bedrock"), SETTINGS))
+    assert svc["environment"]["TRANSPORT"] == "raknet" and svc["environment"]["EULA"] == "TRUE"
+    assert svc["ports"] == ["19132:19132/udp"]
+
+
+def test_valheim_extra_volume_owner_and_grace():
+    rendered = render(get_template("valheim"), CreateRequest(**VALHEIM), SETTINGS)
+    svc = svc_of(rendered)
+    assert svc["volumes"] == ["./data:/config", "./server:/opt/valheim"]
+    assert rendered.volume_dirs == ["data", "server"]
+    assert svc["environment"]["PUID"] == "1000" and svc["environment"]["SERVER_PASS"] == "${SERVER_PASS}"
+    assert "SERVER_PASS=vikings" in rendered.env_file
+    assert svc["stop_grace_period"] == "120s"  # the template's grace is longer than the host default
+
+
+def test_required_secret_is_not_generated():
+    with pytest.raises(TemplateError, match="Join password is required"):
+        render(get_template("valheim"), CreateRequest(**{**VALHEIM, "values": {}}), SETTINGS)
+
+
+def test_another_port_moves_following_ports_and_sets_port_env():
+    rendered = render(get_template("valheim"), CreateRequest(**VALHEIM, port=2466), SETTINGS)
+    svc = svc_of(rendered)
+    assert svc["ports"] == ["2466:2466/udp", "2467:2467/udp"]
+    assert svc["environment"]["SERVER_PORT"] == "2466"
+    satisfactory = svc_of(render(get_template("satisfactory"), request(template="satisfactory", port=7787), SETTINGS))
+    assert satisfactory["ports"] == ["7787:7787/udp", "7787:7787", "8888:8888"]
+    assert satisfactory["environment"]["SERVERGAMEPORT"] == "7787"
+
+
+def test_another_port_without_port_env_only_moves_the_host_side():
+    svc = service(render(get_template("minecraft"), request(port=25570), SETTINGS))
+    assert svc["ports"] == ["25570:25565"] and "SERVER_PORT" not in svc["environment"]
+
+
+def test_port_out_of_range():
+    with pytest.raises(TemplateError, match="outside"):
+        render(get_template("valheim"), CreateRequest(**VALHEIM, port=65535), SETTINGS)
+
+
+def test_dollar_is_escaped_for_compose():
+    svc = service(render(get_template("minecraft"), request(values={"MOTD": "Only $5"}), SETTINGS))
+    assert svc["environment"]["MOTD"] == "Only $$5"

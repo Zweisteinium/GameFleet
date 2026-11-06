@@ -42,6 +42,9 @@ def templates() -> dict[str, Template]:
         template = Template.model_validate(yaml.safe_load(path.read_text()))
         if template.id in found:
             raise TemplateError(f"Template id {template.id} is used twice ({path.name})")
+        for name in template.extra_volumes:
+            if name == "data" or not SLUG.match(name):
+                raise TemplateError(f"{template.id}: {name} is not a usable folder name")
         envs = {v.env for v in template.variables}
         for variable in template.variables:
             if unknown := set(variable.show_if) - envs:
@@ -108,6 +111,7 @@ class Rendered:
     secrets: list[str]
     ports: list[tuple[int, int, str]]  # (host, container, protocol) of the published ports
     image: str  # repository:tag
+    volume_dirs: list[str]  # folders next to the compose file that are bound into the container
 
     @property
     def compose_hash(self) -> str:
@@ -146,10 +150,13 @@ def render(template: Template, request: CreateRequest, settings: HostSettingsBas
     for variable in active_variables(template, request.values, settings):
         default = default_value(variable, settings)
         if variable.type == "secret":
-            value = (request.values.get(variable.env) or (generated or {}).get(variable.env)
-                     or secrets.token_urlsafe(18))
-            if not re.fullmatch(r"[A-Za-z0-9_.~-]{8,128}", value):
-                raise TemplateError(f"{variable.label} needs 8 to 128 letters, digits or _.~-")
+            value = request.values.get(variable.env, "").strip() or (generated or {}).get(variable.env)
+            if not value:
+                if variable.required:  # one the players need, such as a join password: the user picks it
+                    raise TemplateError(f"{variable.label} is required")
+                value = secrets.token_urlsafe(18)
+            if not re.fullmatch(r"[A-Za-z0-9_.~-]{5,128}", value):
+                raise TemplateError(f"{variable.label} needs 5 to 128 letters, digits or _.~-")
             env_file[variable.env] = value
             environment[variable.env] = "${" + variable.env + "}"
             continue
@@ -161,15 +168,21 @@ def render(template: Template, request: CreateRequest, settings: HostSettingsBas
         value = check_value(variable, value)
         if variable.advanced and value == default:
             continue  # the image's own default; keeps the file short
-        environment[variable.env] = value
+        environment[variable.env] = value.replace("$", "$$")  # compose would interpolate a $
         if variable.type == "memory":
             memory = value
 
+    shift = request.port - template.ports[0].port if request.port else 0
+    if shift and template.port_env:
+        environment[template.port_env] = str(request.port)
     ports: list[tuple[int, int, str]] = []
     for index, port in enumerate(template.ports):
+        moves = bool(shift) and (index == 0 or port.follows)
+        host = port.port + shift if moves else port.port
+        if not 1 <= host <= 65535:
+            raise TemplateError(f"The {port.name} port would be {host}, outside 1 to 65535")
         if port.publish:
-            host = request.port if index == 0 and request.port else port.port
-            ports.append((host, port.port, port.protocol))
+            ports.append((host, host if moves and template.port_env else port.port, port.protocol))
     if len({(h, p) for h, _, p in ports}) != len(ports):
         raise TemplateError("Two ports of this server would use the same host port")
 
@@ -178,7 +191,7 @@ def render(template: Template, request: CreateRequest, settings: HostSettingsBas
         "image": f"{template.image}:{tag}",
         "container_name": project,
         "restart": settings.restart_policy,
-        "stop_grace_period": f"{settings.stop_grace_seconds}s",
+        "stop_grace_period": f"{max(settings.stop_grace_seconds, template.stop_grace)}s",
     }
     if template.tty:
         service["tty"] = True
@@ -186,7 +199,7 @@ def render(template: Template, request: CreateRequest, settings: HostSettingsBas
         service["stdin_open"] = True
     service["environment"] = environment
     service["ports"] = [f"{h}:{c}" + ("/udp" if p == "udp" else "") for h, c, p in ports]
-    service["volumes"] = [f"./data:{template.data_path}"]
+    service["volumes"] = [f"./data:{template.data_path}"] + [f"./{d}:{p}" for d, p in template.extra_volumes.items()]
     limits: dict[str, str] = {}
     if memory:
         limits["memory"] = f"{math.ceil(memory_mib(memory) * (1 + template.memory_overhead))}M"
@@ -202,4 +215,5 @@ def render(template: Template, request: CreateRequest, settings: HostSettingsBas
     return Rendered(
         folder=server_folder(settings, template, request.slug), project=project, container_name=project,
         compose=compose, env_file=env_text, secrets=list(env_file), ports=ports, image=service["image"],
+        volume_dirs=["data", *template.extra_volumes],
     )

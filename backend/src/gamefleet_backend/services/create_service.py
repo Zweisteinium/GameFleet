@@ -67,9 +67,10 @@ async def compose(rendered: Rendered, *args: str) -> str:
 def write_files(rendered: Rendered, settings: HostSettingsBase) -> None:
     os.makedirs(os.path.dirname(rendered.folder), mode=0o755, exist_ok=True)
     os.mkdir(rendered.folder, 0o755)  # fails if it exists: never write into somebody's folder
-    data = os.path.join(rendered.folder, "data")
-    os.mkdir(data, 0o755)
-    paths = [rendered.folder, data]
+    paths = [rendered.folder]
+    for name in rendered.volume_dirs:
+        os.mkdir(os.path.join(rendered.folder, name), 0o755)
+        paths.append(os.path.join(rendered.folder, name))
     for name, text, mode in (("docker-compose.yml", rendered.compose, 0o644), (".env", rendered.env_file, 0o600)):
         path = os.path.join(rendered.folder, name)
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)

@@ -14,6 +14,8 @@ class TemplatePort(BaseModel):
     protocol: Literal["tcp", "udp"] = "tcp"
     # False keeps the port inside Docker: RCON is only used by GameFleet and the image's own tools.
     publish: bool = True
+    # Moves with the game port when the user picks another one, keeping its distance (Valheim's query port).
+    follows: bool = False
 
 
 class Option(BaseModel):
@@ -63,8 +65,14 @@ class Template(BaseModel):
     tags: list[ImageTag] = Field(min_length=1)  # the first is the default
     folder: str  # servers are created in <servers_dir>/<folder>/<name>/
     data_path: str  # where the image keeps its data; bound to ./data next to the compose file
+    # More folders next to data/, by folder name: path in the container (e.g. Valheim's server files).
+    extra_volumes: dict[str, str] = {}
     eula: Optional[Eula] = None
     ports: list[TemplatePort] = Field(min_length=1)  # the first is the game port
+    # Variable that tells the server its game port. Set: another game port moves the container ports too and
+    # the variable gets the new port (servers that announce their port); unset: only the host port changes.
+    port_env: Optional[str] = None
+    stop_grace: int = Field(default=0, ge=0, le=3600)  # seconds; the host setting applies when it is longer
     variables: list[TemplateVariable] = []
     environment: dict[str, str] = {}  # fixed values
     # Variables filled from the host settings, e.g. {"UID": "owner_uid", "TZ": "timezone"}.
