@@ -34,3 +34,4 @@ variables:
     default: "false"
     help: Needs your factorio.com name and token (USERNAME, TOKEN) in the compose file.
     advanced: true
+    group: Software

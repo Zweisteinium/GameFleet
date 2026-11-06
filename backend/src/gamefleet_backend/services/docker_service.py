@@ -281,6 +281,9 @@ class DockerService:
     async def inspect(self, name: str) -> dict[str, Any]:
         return await self._call(lambda c: c.api.inspect_container(name))
 
+    async def inspect_image(self, image: str) -> dict[str, Any]:
+        return await self._call(lambda c: c.api.inspect_image(image))
+
     async def env(self, name: str) -> dict[str, str]:
         data = await self.inspect(name)
         result = {}

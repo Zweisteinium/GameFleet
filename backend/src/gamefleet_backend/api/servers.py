@@ -14,6 +14,7 @@ from gamefleet_backend import auth
 from gamefleet_backend.auth import current_user, download_user, is_admin
 from gamefleet_backend.db.models.game_server import GameServer, GameServerPublic
 from gamefleet_backend.dependencies import get_docker_discovery_service, get_game_server_service
+from gamefleet_backend.models.compose_info import ComposeFile, ComposeFileUpdate, ComposeInfo, ComposeUpdate
 from gamefleet_backend.models.config_info import ConfigInfo, FileContent, FileUpdate, FileWritten, SettingsUpdate
 from gamefleet_backend.models.container_info import HostStats
 from gamefleet_backend.models.game_server_type import GAME_CATALOG, GameServerType, QueryProtocol
@@ -21,6 +22,7 @@ from gamefleet_backend.models.server_info import LiveServerInfo
 from gamefleet_backend.services.backup_service import (
     BackupError, BackupInfo, BackupJob, World, backup_service, plan_upload,
 )
+from gamefleet_backend.services.compose_service import compose_service
 from gamefleet_backend.services.config_service import ConfigError, config_service
 from gamefleet_backend.services.docker_discovery_service import DockerDiscoveryService
 from gamefleet_backend.services.docker_service import DockerUnavailable, docker_service
@@ -323,7 +325,13 @@ async def power_server(
     try:
         if body.action == "start":
             await _free_ports(server, body.stop_conflicting, service)
-        await docker_service.power(server.container_name, body.action)
+        if body.action != "stop" and await compose_service.has_pending(server):
+            # The compose file changed since the container was made: a restart would run the old settings.
+            await compose_service.recreate(server)
+        else:
+            await docker_service.power(server.container_name, body.action)
+    except ConfigError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except DockerUnavailable as exc:
         raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}")
     except docker.errors.NotFound:
@@ -540,3 +548,69 @@ async def update_config_file(server_id: str, body: FileUpdate,
         return await config_service.write(server, body.path, body.content)
     except (ConfigError, DockerUnavailable, docker.errors.DockerException) as exc:
         raise _config_error(exc)
+
+
+# ---- compose file (Docker Compose projects, login required) ---------------------------------------------
+
+class RecreateRequest(BaseModel):
+    stop_conflicting: bool = False
+
+
+@router.get('/{server_id}/compose', response_model=ComposeInfo, operation_id="getCompose", dependencies=LOGIN)
+async def get_compose(server_id: str, service: GameServerService = Depends(get_game_server_service)):
+    """The settings kept in the environment of the server's compose service, and which ones are not applied yet."""
+    server = await _docker_server(server_id, service)
+    try:
+        return await compose_service.info(server)
+    except (ConfigError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _config_error(exc)
+
+
+@router.put('/{server_id}/compose/settings', response_model=ComposeInfo, operation_id="updateComposeSettings",
+            dependencies=LOGIN)
+async def update_compose_settings(server_id: str, body: ComposeUpdate,
+                                  service: GameServerService = Depends(get_game_server_service)):
+    """Change variables in the compose file (null removes one). They apply when the container is recreated."""
+    server = await _docker_server(server_id, service)
+    try:
+        return await compose_service.update(server, body.values)
+    except (ConfigError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _config_error(exc)
+
+
+@router.get('/{server_id}/compose/file', response_model=ComposeFile, operation_id="getComposeFile", dependencies=LOGIN)
+async def get_compose_file(server_id: str, service: GameServerService = Depends(get_game_server_service)):
+    server = await _docker_server(server_id, service)
+    try:
+        return await compose_service.read_file(server)
+    except (ConfigError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _config_error(exc)
+
+
+@router.put('/{server_id}/compose/file', response_model=ComposeFile, operation_id="updateComposeFile", dependencies=LOGIN)
+async def update_compose_file(server_id: str, body: ComposeFileUpdate,
+                              service: GameServerService = Depends(get_game_server_service)):
+    """Replace the compose file; `docker compose config` must accept it. The old one is kept as .gamefleet-bak."""
+    server = await _docker_server(server_id, service)
+    try:
+        return await compose_service.write_file(server, body.content)
+    except (ConfigError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _config_error(exc)
+
+
+@router.post('/{server_id}/compose/recreate', response_model=HostStats, operation_id="recreateServer", dependencies=LOGIN,
+             responses={409: {"model": PowerConflictDetail}})
+async def recreate_server(server_id: str, body: RecreateRequest,
+                          service: GameServerService = Depends(get_game_server_service)):
+    """`docker compose up -d` for the server: applies the compose file and starts the container."""
+    server = await _docker_server(server_id, service)
+    job = backup_service.jobs.get(server_id)
+    if job and job.finished_at is None:
+        raise HTTPException(status_code=409, detail=f"A {job.action} is running; wait until it has finished.")
+    try:
+        if not (await docker_service.inspect(server.container_name)).get("State", {}).get("Running"):
+            await _free_ports(server, body.stop_conflicting, service)
+        await compose_service.recreate(server)
+    except (ConfigError, DockerUnavailable, docker.errors.DockerException) as exc:
+        raise _config_error(exc)
+    return await docker_service.host_stats(server.container_name, server.data_path, server.world_path)

@@ -36,8 +36,10 @@ variables:
     type: number
     default: "5"
     advanced: true
+    group: Saving
   - env: SKIPUPDATE
     label: Skip game updates on start
     type: boolean
     default: "false"
     advanced: true
+    group: Software

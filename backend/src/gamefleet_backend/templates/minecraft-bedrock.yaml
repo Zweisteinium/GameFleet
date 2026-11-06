@@ -37,6 +37,7 @@ variables:
     default: LATEST
     pattern: '^(LATEST|PREVIEW|[0-9][0-9.]*)$'
     help: LATEST, PREVIEW or a version such as 1.21.120.4.
+    group: Software
   - env: SERVER_NAME
     label: Server name
     default: Dedicated Server
@@ -77,3 +78,4 @@ variables:
     placeholder: gamertag1, gamertag2
     help: Empty lets everyone join.
     advanced: true
+    group: Access

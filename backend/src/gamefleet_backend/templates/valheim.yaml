@@ -37,6 +37,7 @@ variables:
     default: Dedicated
     required: true
     pattern: '^[A-Za-z0-9_-]{1,64}$'
+    settings: false
   - env: SERVER_PASS
     label: Join password
     type: secret
@@ -46,13 +47,16 @@ variables:
     label: List in the server browser
     type: boolean
     default: "false"
+    group: Access
   - env: BACKUPS
     label: World backups
     type: boolean
     default: "true"
     advanced: true
+    group: Saving
   - env: UPDATE_CRON
     label: Update check
     default: "*/15 * * * *"
     help: Cron schedule; the server restarts for an update when nobody is online.
     advanced: true
+    group: Software

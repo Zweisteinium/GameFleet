@@ -56,6 +56,7 @@ variables:
     suggest: minecraft-versions
     pattern: '^(LATEST|SNAPSHOT|[0-9][0-9A-Za-z.+-]*)$'
     show_if: {TYPE: [VANILLA, PAPER, FABRIC, FORGE, NEOFORGE]}
+    group: Software
   - env: MODRINTH_MODPACK
     label: Modpack
     type: modrinth-modpack
@@ -67,6 +68,7 @@ variables:
     placeholder: newest release
     advanced: true
     show_if: {TYPE: [MODRINTH]}
+    group: Software
   - env: CF_PAGE_URL
     label: CurseForge pack URL
     required: true
@@ -74,14 +76,17 @@ variables:
     pattern: '^https://www\.curseforge\.com/minecraft/modpacks/[^/\s]+(/files/[0-9]+)?/?$'
     help: The images from Java 17 on bring a CurseForge API key; Java 8 packs need one of your own.
     show_if: {TYPE: [AUTO_CURSEFORGE]}
+    settings: false
   - env: GTNH_PACK_VERSION
     label: Pack version
     default: latest
     show_if: {TYPE: [GTNH]}
+    group: Software
   - env: MEMORY
     label: Memory
     type: memory
     help: Java heap. The container may use a quarter more.
+    group: Resources
   - env: MOTD
     label: Message of the day
     advanced: true
@@ -120,10 +125,12 @@ variables:
     placeholder: Steve, Alex
     advanced: true
     show_if: {ENABLE_WHITELIST: ["true"]}
+    group: Access
   - env: OPS
     label: Operators
     placeholder: Steve
     advanced: true
+    group: Access
   - env: RCON_PASSWORD
     label: RCON password
     type: secret

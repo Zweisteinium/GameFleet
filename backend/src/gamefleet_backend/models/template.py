@@ -41,6 +41,10 @@ class TemplateVariable(BaseModel):
     suggest: Optional[Literal["minecraft-versions"]] = None
     # Only used (shown, validated, written) while another variable has one of these values.
     show_if: dict[str, list[str]] = {}
+    # Offered on the server's Settings tab after creation (compose_service); False for choices that make it
+    # another server, such as the modpack.
+    settings: bool = True
+    group: Optional[str] = None  # heading on the Settings tab
 
 
 class ImageTag(BaseModel):
