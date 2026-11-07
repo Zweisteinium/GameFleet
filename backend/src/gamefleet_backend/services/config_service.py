@@ -37,7 +37,7 @@ class ConfigError(Exception):
 @dataclass(frozen=True)
 class ConfigLayout:
     settings_file: Optional[str] = None  # {data} and {world} as in backup_service
-    format: Optional[str] = None  # "properties" | "json"
+    format: Optional[str] = None  # "properties" | "json" | "ini" (keys as "<section>/<key>")
     specs: tuple[SettingSpec, ...] = ()
     env_map: dict[str, str] = field(default_factory=dict)  # setting key -> container variable overriding it
     files: tuple[tuple[str, str], ...] = ()  # (path template, label)
@@ -45,6 +45,8 @@ class ConfigLayout:
     world_keys: tuple[str, ...] = ()
     world_dir: str = "{data}/{name}"
     world_name_key: str = ""
+    # Set when the game rewrites its settings files while running or on shutdown (ARK): edits wait for a stop.
+    edit_when_stopped: str = ""
 
 
 def _s(key: str, label: str, type: str, description: str = "", options: tuple[str, ...] = (), group: str = "") -> SettingSpec:
@@ -52,7 +54,7 @@ def _s(key: str, label: str, type: str, description: str = "", options: tuple[st
 
 
 MINECRAFT_SPECS = (
-    _s("motd", "Message of the day", "str", "Shown in the server list; § colour codes work.", group="General"),
+    _s("motd", "MOTD", "str", "Shown under the server name in the multiplayer list.", group="General"),
     _s("max-players", "Max players", "int", group="General"),
     _s("difficulty", "Difficulty", "enum", options=("peaceful", "easy", "normal", "hard"), group="Gameplay"),
     _s("gamemode", "Game mode", "enum", "Mode for new players.", ("survival", "creative", "adventure", "spectator"), "Gameplay"),
@@ -111,6 +113,40 @@ FACTORIO_SPECS = (
     _s("only_admins_can_pause_the_game", "Only admins pause", "bool", group="Gameplay"),
 )
 
+ARK_INI = "{data}/server/ShooterGame/Saved/Config/LinuxServer"  # /app/*.ini are symlinks into it
+ARK_SPECS = (
+    _s("SessionSettings/SessionName", "Server name", "str", "Shown in the server browser.", group="General"),
+    _s("/Script/Engine.GameSession/MaxPlayers", "Max players", "int", group="General"),
+    _s("MessageOfTheDay/Message", "Message of the day", "str", "Shown to players when they join.", group="General"),
+    _s("MessageOfTheDay/Duration", "Message duration", "int", "Seconds the message stays on screen.", group="General"),
+    _s("ServerSettings/ServerPVE", "PvE", "bool", "Players cannot damage each other or their structures.", group="Gameplay"),
+    _s("ServerSettings/DifficultyOffset", "Difficulty offset", "float", "0 to 1; with the official difficulty sets the wild dino levels.", group="Gameplay"),
+    _s("ServerSettings/OverrideOfficialDifficulty", "Official difficulty", "float", "5.0 allows wild dinos up to level 150.", group="Gameplay"),
+    _s("ServerSettings/AllowThirdPersonPlayer", "Third person", "bool", group="Gameplay"),
+    _s("ServerSettings/ServerCrosshair", "Crosshair", "bool", group="Gameplay"),
+    _s("ServerSettings/ShowMapPlayerLocation", "Own position on the map", "bool", group="Gameplay"),
+    _s("ServerSettings/ShowFloatingDamageText", "Damage numbers", "bool", group="Gameplay"),
+    _s("ServerSettings/PreventOfflinePvP", "Offline raid protection", "bool", "Protects tribes whose members are all offline.", group="Gameplay"),
+    _s("ServerSettings/XPMultiplier", "XP", "float", group="Rates"),
+    _s("ServerSettings/TamingSpeedMultiplier", "Taming speed", "float", group="Rates"),
+    _s("ServerSettings/HarvestAmountMultiplier", "Harvest amount", "float", group="Rates"),
+    _s("ServerSettings/HarvestHealthMultiplier", "Resource health", "float", "Higher means more hits per tree or rock.", group="Rates"),
+    _s("ServerSettings/ResourcesRespawnPeriodMultiplier", "Resource respawn time", "float", "Lower respawns faster.", group="Rates"),
+    _s("ServerSettings/ItemStackSizeMultiplier", "Stack size", "float", group="Rates"),
+    _s("ServerSettings/DayTimeSpeedScale", "Day speed", "float", group="Rates"),
+    _s("ServerSettings/NightTimeSpeedScale", "Night speed", "float", group="Rates"),
+    _s("ServerSettings/DinoCountMultiplier", "Wild dino count", "float", group="Rates"),
+    _s("ServerSettings/PlayerCharacterFoodDrainMultiplier", "Food drain", "float", group="Rates"),
+    _s("ServerSettings/PlayerCharacterWaterDrainMultiplier", "Water drain", "float", group="Rates"),
+    _s("ServerSettings/MaxTamedDinos", "Max tamed dinos", "int", "For the whole server.", group="Limits"),
+    _s("ServerSettings/KickIdlePlayersPeriod", "Idle kick", "int", "Seconds.", group="Limits"),
+    _s("ServerSettings/AutoSavePeriodMinutes", "Autosave interval", "float", "Minutes.", group="Saving"),
+    _s("ServerSettings/RCONEnabled", "RCON", "bool", group="Access"),
+    _s("ServerSettings/RCONPort", "RCON port", "int", group="Access"),
+)
+# hermsi/ark-server hands these to arkmanager, which passes them on the command line: they win over the file.
+ARK_ENV = {"SessionSettings/SessionName": "SESSION_NAME", "/Script/Engine.GameSession/MaxPlayers": "MAX_PLAYERS"}
+
 LAYOUTS: dict[GameServerType, ConfigLayout] = {
     GameServerType.minecraft: ConfigLayout(
         "{data}/server.properties", "properties", MINECRAFT_SPECS, MINECRAFT_ENV,
@@ -133,6 +169,12 @@ LAYOUTS: dict[GameServerType, ConfigLayout] = {
          ("{data}/config/map-settings.json", "map-settings.json"),
          ("{data}/config/server-adminlist.json", "Admins"), ("{data}/config/server-whitelist.json", "Whitelist"),
          ("{data}/config/server-banlist.json", "Ban list")),
+    ),
+    GameServerType.ark_ase: ConfigLayout(
+        f"{ARK_INI}/GameUserSettings.ini", "ini", ARK_SPECS, ARK_ENV,
+        ((f"{ARK_INI}/GameUserSettings.ini", "GameUserSettings.ini"), (f"{ARK_INI}/Game.ini", "Game.ini"),
+         ("{data}/crontab", "crontab")),
+        edit_when_stopped="ARK writes its .ini files when it shuts down and would undo the change. Stop the server first.",
     ),
     GameServerType.valheim: ConfigLayout(
         files=(("{data}/adminlist.txt", "Admins"), ("{data}/bannedlist.txt", "Banned"), ("{data}/permittedlist.txt", "Permitted")),
@@ -202,6 +244,59 @@ def write_properties(text: str, changes: dict[str, str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+_SECTION = re.compile(r"^\s*\[(.+)\]\s*$")
+
+
+def read_ini(text: str) -> dict[str, str]:
+    """Unreal .ini: "<section>/<key>" -> value. Repeated keys (arrays in Game.ini) keep the last value."""
+    values: dict[str, str] = {}
+    section = ""
+    for line in text.splitlines():
+        match = _SECTION.match(line)
+        if match:
+            section = match.group(1)
+            continue
+        if not line.strip() or line.lstrip()[0] in ";#" or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        values[f"{section}/{key.strip()}"] = value.strip()
+    return values
+
+
+def write_ini(text: str, changes: dict[str, str]) -> str:
+    """Replace the changed keys in their sections; new keys go to the end of their section, new sections last."""
+    lines = text.splitlines()
+    pending = {k.rsplit("/", 1)[0]: {} for k in changes}
+    for key, value in changes.items():
+        section, name = key.rsplit("/", 1)
+        pending[section][name] = value
+    section, ends = "", {}
+    for index, line in enumerate(lines):
+        match = _SECTION.match(line)
+        if match:
+            section = match.group(1)
+            continue
+        if line.strip():
+            ends[section] = index
+        name = line.partition("=")[0].strip()
+        if "=" in line and section in pending and name in pending[section]:
+            lines[index] = f"{name}={pending[section].pop(name)}"
+    for section_name, rest in sorted(((s, r) for s, r in pending.items() if r and s in ends),
+                                     key=lambda item: ends[item[0]], reverse=True):
+        at = ends[section_name] + 1
+        lines[at:at] = [f"{k}={v}" for k, v in rest.items()]
+        rest.clear()
+    for section_name, rest in pending.items():
+        if rest:
+            lines += ["", f"[{section_name}]"] + [f"{k}={v}" for k, v in rest.items()]
+    return "\n".join(lines) + "\n"
+
+
+def _float_text(value: float) -> str:
+    text = f"{value:.6f}".rstrip("0")
+    return text + "0" if text.endswith(".") else text
+
+
 def _get_path(data: dict[str, Any], key: str) -> Any:
     node: Any = data
     for part in key.split("."):
@@ -232,6 +327,11 @@ def _coerce(spec: SettingSpec, value: SettingScalar) -> SettingScalar:
             return int(value)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             raise ConfigError(f"{spec.label} must be a whole number.")
+    if spec.type == "float":
+        try:
+            return float(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            raise ConfigError(f"{spec.label} must be a number.")
     text = "" if value is None else str(value)
     if spec.type == "enum" and text not in spec.options:
         raise ConfigError(f"{spec.label} must be one of {', '.join(spec.options)}.")
@@ -245,11 +345,12 @@ def _from_text(spec: SettingSpec, raw: Optional[str]) -> SettingScalar:
         return None
     if spec.type == "bool":
         return raw.strip().lower() == "true"
-    if spec.type == "int":
+    if spec.type in ("int", "float"):
         try:
-            return int(raw.strip())
+            number = float(raw.strip())
         except ValueError:
             return None
+        return int(number) if spec.type == "int" and number.is_integer() else number
     return raw
 
 
@@ -320,7 +421,8 @@ class ConfigService:
             text = await self._read_text(name, target.settings_file)
             if text is not None:
                 settings = await self._settings(target, text)
-        return ConfigInfo(supported=True, settings_file=target.settings_file, settings=settings, files=files)
+        return ConfigInfo(supported=True, settings_file=target.settings_file, settings=settings, files=files,
+                          edit_when_stopped=target.layout.edit_when_stopped or None)
 
     async def _existing_files(self, target: Target) -> list[ConfigFile]:
         allowed = target.allowed
@@ -339,8 +441,8 @@ class ConfigService:
     async def _settings(self, target: Target, text: str) -> list[SettingValue]:
         layout = target.layout
         env = await docker_service.env(target.server.container_name)
-        if layout.format == "properties":
-            values = read_properties(text)
+        if layout.format in ("properties", "ini"):
+            values = read_properties(text) if layout.format == "properties" else read_ini(text)
             current = {spec.key: _from_text(spec, values.get(spec.key)) for spec in layout.specs}
         else:
             try:
@@ -382,9 +484,16 @@ class ConfigService:
             if current[key].env_override is not None and coerced[key] != current[key].value:
                 # The image writes it from the container environment on every start: the change would be lost.
                 raise ConfigError(f"{specs[key].label} is set by the container environment; change it there.")
+        await self._check_stopped(target)
         if target.layout.format == "properties":
             changes = {key: ("true" if v is True else "false" if v is False else str(v)) for key, v in coerced.items()}
             new_text = write_properties(text, changes)
+        elif target.layout.format == "ini":
+            changes = {key: ("True" if v is True else "False" if v is False
+                             else _float_text(v) if isinstance(v, float) else str(v)) for key, v in coerced.items()}
+            if any("\n" in v for v in changes.values()):
+                raise ConfigError("Values in an .ini file must be a single line.")
+            new_text = write_ini(text, changes)
         else:
             data = json.loads(text)
             for key, value in coerced.items():
@@ -421,6 +530,7 @@ class ConfigService:
             raise ConfigError("Not an editable file of this server.")
         if len(content.encode()) > MAX_FILE:
             raise ConfigError("The content is larger than 1 MiB.")
+        await self._check_stopped(target)
         if path.endswith(".json"):
             try:
                 json.loads(content)
@@ -428,6 +538,13 @@ class ConfigService:
                 raise ConfigError(f"Not valid JSON: {exc}")
         await self._write_text(server.container_name, path, content)
         return FileWritten(path=path, size=len(content.encode()))
+
+    async def _check_stopped(self, target: Target) -> None:
+        if not target.layout.edit_when_stopped:
+            return
+        attrs = await docker_service.inspect(target.server.container_name)
+        if (attrs.get("State") or {}).get("Running"):
+            raise ConfigError(target.layout.edit_when_stopped)
 
     # ---- reading and writing through the archive endpoint ----
 

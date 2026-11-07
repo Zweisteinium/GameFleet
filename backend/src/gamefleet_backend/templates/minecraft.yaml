@@ -88,7 +88,8 @@ variables:
     help: Java heap. The container may use a quarter more.
     group: Resources
   - env: MOTD
-    label: Message of the day
+    label: MOTD
+    help: Shown under the server name in the multiplayer list; § codes set colour and style.
     advanced: true
   - env: DIFFICULTY
     label: Difficulty

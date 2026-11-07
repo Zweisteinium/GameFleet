@@ -2,8 +2,9 @@ from typing import Literal, Optional, Union
 
 from pydantic import BaseModel
 
-SettingType = Literal["bool", "int", "str", "enum"]
-SettingScalar = Union[bool, int, str, None]
+# secret: a password; the value never leaves the backend, the form only replaces it.
+SettingType = Literal["bool", "int", "float", "str", "enum", "secret"]
+SettingScalar = Union[bool, int, float, str, None]
 
 
 class SettingSpec(BaseModel):
@@ -39,6 +40,8 @@ class ConfigInfo(BaseModel):
     # The game reads its settings on start, so changes need a restart to take effect.
     restart_required_hint: bool = True
     restart_needed: bool = False
+    # Set when the files can only be changed while the server is stopped: why.
+    edit_when_stopped: Optional[str] = None
 
 
 class SettingsUpdate(BaseModel):

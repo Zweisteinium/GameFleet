@@ -8,6 +8,10 @@ their comments, order and quoting. Every write is checked twice before it replac
 must parse to exactly the old document with only the intended variables changed, and `docker compose config`
 must accept it. The previous file is kept as `<file>.gamefleet-bak`. A change applies when the container is
 recreated (`docker compose up -d <service>`); until then the variable is reported as pending.
+
+A variable written as `NAME=${OTHER}` takes its value from the project's .env file. When .env holds OTHER on
+a single line, the form edits that line instead, checked the same way: `docker compose config` with the new
+file must give the old configuration with only the intended variables changed.
 """
 import asyncio
 import json
@@ -34,6 +38,10 @@ log = logging.getLogger(__name__)
 
 ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 INTERPOLATION = re.compile(r"(?<!\$)\$(\{|[A-Za-z_])")  # $VAR or ${VAR}, not the escaped $$
+REFERENCE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$|^\$([A-Za-z_][A-Za-z0-9_]*)$")  # exactly one variable
+DOTENV_LINE = re.compile(r"^(\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*)")
+DOTENV_PLAIN = re.compile(r"[A-Za-z0-9_./:,@+%=-]*")  # written without quotes
+MAX_DOTENV = 64 * 1024
 MAX_COMPOSE = 256 * 1024
 # Variables the settings form never offers: changing them turns the server into another one.
 NOT_SETTINGS = {"EULA", "TYPE", "UID", "GID", "PUID", "PGID", "TZ"}
@@ -56,16 +64,23 @@ class Project:
     def file(self) -> str:
         return self.files[0]
 
-    def args(self, files: Optional[list[str]] = None) -> list[str]:
+    @property
+    def dotenv(self) -> str:
+        return os.path.join(self.working_dir, ".env")
+
+    def args(self, files: Optional[list[str]] = None, env_file: Optional[str] = None) -> list[str]:
         result = ["-p", self.name, "--project-directory", self.working_dir]
         for f in files or self.files:
             result += ["-f", f]
+        if env_file:
+            result += ["--env-file", env_file]
         return result
 
 
-async def compose_cli(project: Project, *args: str, files: Optional[list[str]] = None) -> str:
+async def compose_cli(project: Project, *args: str, files: Optional[list[str]] = None,
+                      env_file: Optional[str] = None) -> str:
     process = await asyncio.create_subprocess_exec(
-        "docker", "compose", *project.args(files), *args, cwd=project.working_dir,
+        "docker", "compose", *project.args(files, env_file), *args, cwd=project.working_dir,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
     out, err = await process.communicate()
@@ -83,6 +98,28 @@ def _template_spec(variable) -> Optional[SettingSpec]:
         return None  # secrets and modpack pickers stay in the file
     return SettingSpec(key=variable.env, label=variable.label, type=kind, description=variable.help or "",
                        options=[o.value for o in variable.options], group=variable.group or "General")
+
+
+def _e(env: str, label: str, type: str, description: str = "", options: tuple[str, ...] = (), group: str = "") -> SettingSpec:
+    return SettingSpec(key=env, label=label, type=type, description=description, options=list(options), group=group)
+
+
+# Images GameFleet has no template for, by the last two parts of the repository.
+IMAGE_SPECS: dict[str, tuple[SettingSpec, ...]] = {
+    "hermsi/ark-server": (
+        _e("SERVER_MAP", "Map", "enum", "Each map keeps its own save.",
+           ("TheIsland", "TheCenter", "ScorchedEarth_P", "Ragnarok", "Aberration_P", "Extinction", "Valguero_P",
+            "Genesis", "CrystalIsles", "Gen2", "LostIsland", "Fjordur"), "General"),
+        _e("SERVER_PASSWORD", "Join password", "secret", "Empty lets anyone join.", group="Access"),
+        _e("ADMIN_PASSWORD", "Admin password", "secret", "For enablecheats and RCON.", group="Access"),
+        _e("GAME_MOD_IDS", "Mods", "str", "Steam Workshop IDs, comma separated; installed on start.", group="Software"),
+        _e("UPDATE_ON_START", "Update on start", "bool", group="Updates and backups"),
+        _e("PRE_UPDATE_BACKUP", "Back up before updates", "bool", group="Updates and backups"),
+        _e("BACKUP_ON_STOP", "Back up on stop", "bool", group="Updates and backups"),
+        _e("WARN_ON_STOP", "Warn players before stopping", "bool", "Announces the shutdown in chat first.",
+           group="Updates and backups"),
+    ),
+}
 
 
 @dataclass
@@ -109,6 +146,10 @@ def specs_for(server: GameServer, image: str) -> list[Offered]:
     name = image.split("@")[0]
     repository = name.rsplit(":", 1)[0] if ":" in name.rsplit("/", 1)[-1] else name
     short = "/".join(repository.split("/")[-2:])  # ghcr.io/lloesche/valheim-server is lloesche/valheim-server
+    for spec in IMAGE_SPECS.get(short, ()):
+        if spec.key not in seen:
+            result.append(Offered(spec.key, spec))
+            seen.add(spec.key)
     for template in templates().values():
         if "/".join(template.image.split("/")[-2:]) != short:
             continue
@@ -310,6 +351,52 @@ def check_patch(old: str, new: str, service: str, changes: dict[str, Optional[st
         raise ComposeError("The change would touch more than the environment; nothing was written.")
 
 
+def dotenv_locate(text: str) -> dict[str, Optional[Located]]:
+    """Where each variable's value sits in a .env file; None when it spans lines or is defined twice."""
+    found: dict[str, Optional[Located]] = {}
+    for index, line in enumerate(text.split("\n")):
+        match = DOTENV_LINE.match(line)
+        if not match:
+            continue
+        name, start = match.group(2), match.end()
+        if name in found:
+            found[name] = None
+            continue
+        rest = line[start:]
+        if rest[:1] in ("'", '"'):
+            i = 1
+            while i < len(rest) and rest[i] != rest[0]:
+                i += 2 if rest[0] == '"' and rest[i] == "\\" else 1
+            found[name] = Located(index, start, start + i + 1) if i < len(rest) else None
+        else:
+            comment = re.search(r"\s#", rest)
+            value = rest[:comment.start()] if comment else rest
+            found[name] = Located(index, start, start + len(value.rstrip()))
+    return found
+
+
+def dotenv_quote(name: str, value: str) -> str:
+    if any(ch in value for ch in "\n\r\x00"):
+        raise ComposeError(f"{name} must be a single line.")
+    if DOTENV_PLAIN.fullmatch(value):
+        return value
+    if "'" not in value:
+        return f"'{value}'"  # taken literally: no escapes, no interpolation
+    raise ComposeError(f"{name} contains a ' and other special characters; change it in .env by hand.")
+
+
+def dotenv_patch(text: str, changes: dict[str, str]) -> str:
+    lines = text.split("\n")
+    places = dotenv_locate(text)
+    for name, value in changes.items():
+        place = places.get(name)
+        if place is None:
+            raise ComposeError(f"{name} is not on a single line of .env; change it there.")
+        line = lines[place.line]
+        lines[place.line] = line[:place.start] + dotenv_quote(name, value) + line[place.end:]
+    return "\n".join(lines)
+
+
 def _write_like(path: str, content: str, like: os.stat_result) -> None:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, like.st_mode & 0o777)
     with os.fdopen(fd, "w") as file:
@@ -370,6 +457,8 @@ class ComposeService:
         raw = raw_environment(env)
         places = locate(text.split("\n"), env)
         resolved = await self.resolved(project)
+        dotenv = await asyncio.to_thread(self._read_dotenv, project)
+        dotenv_places = dotenv_locate(dotenv) if dotenv is not None else {}
         # Current values of the settings file, and which keys are fixed because the world exists.
         file_values: dict[str, SettingScalar] = {}
         locked: dict[str, str] = {}
@@ -387,16 +476,24 @@ class ComposeService:
             env_name, spec, file_key = offered.env, offered.spec, offered.file_key
             value = resolved.get(env_name)
             readonly = None
-            if env_name in raw and raw[env_name] is not None and INTERPOLATION.search(raw[env_name]):
-                readonly = f"Set from a variable ({raw[env_name]}); change it in .env."
+            env_file = None
+            reference = REFERENCE.match(raw.get(env_name) or "")
+            if reference and dotenv_places.get(reference.group(1) or reference.group(2)):
+                env_file = project.dotenv
+            elif env_name in raw and raw[env_name] is not None and INTERPOLATION.search(raw[env_name]):
+                readonly = f"Set from a variable ({raw[env_name]}) that is not on a single line of .env; change it there."
             elif env_name in resolved and env_name not in raw:
                 readonly = "Set in an env_file; change it there."
             elif env_name in places and places[env_name] is None:
                 readonly = "Spans several lines in the compose file; change it there."
             elif file_key and file_key in locked:
                 readonly = locked[file_key]
+            fields = spec.model_dump()
+            if spec.type == "enum" and value and value not in spec.options:
+                fields["options"] = [*spec.options, value]  # a modded map or a value the list does not know
             settings.append(ComposeSetting(
-                **spec.model_dump(), env=env_name, value=_typed(spec, value), readonly=readonly,
+                **fields, env=env_name, value=None if spec.type == "secret" else _typed(spec, value),
+                readonly=readonly, env_file=env_file, is_set=bool(value),
                 file_value=file_values.get(file_key) if file_key else None,
                 multiline=env_name in MOTD_VARS, motd=env_name in MOTD_VARS and server.game == GameServerType.minecraft,
             ))
@@ -414,13 +511,72 @@ class ComposeService:
             if unknown:
                 raise ComposeError(f"Not a setting of this server: {', '.join(sorted(unknown))}.")
             changes: dict[str, Optional[str]] = {}
+            dotenv_changes: dict[str, str] = {}  # .env variable -> value
+            via_dotenv: dict[str, str] = {}  # service variable -> value, as it should come out
+            text = await asyncio.to_thread(self._read, project)
+            raw = raw_environment(service_environment(_load(text), project.service)[1])
             for env, value in values.items():
-                if current[env].readonly:
-                    raise ComposeError(f"{current[env].label}: {current[env].readonly}")
-                changes[env] = None if value is None else _text(current[env], value)
-            await self._replace(project, lambda text: patch(text, project.service, changes),
-                                lambda old, new: check_patch(old, new, project.service, changes))
+                setting = current[env]
+                if setting.readonly:
+                    raise ComposeError(f"{setting.label}: {setting.readonly}")
+                if setting.env_file:
+                    if value is None:
+                        raise ComposeError(f"{setting.label} comes from .env; remove it there.")
+                    reference = REFERENCE.match(raw[env] or "")
+                    assert reference
+                    dotenv_changes[reference.group(1) or reference.group(2)] = via_dotenv[env] = _text(setting, value)
+                else:
+                    changes[env] = None if value is None else _text(setting, value)
+            if dotenv_changes:
+                await self._replace_dotenv(project, dotenv_changes, via_dotenv)
+            if changes:
+                await self._replace(project, lambda text: patch(text, project.service, changes),
+                                    lambda old, new: check_patch(old, new, project.service, changes))
         return await self.info(server)
+
+    def _read_dotenv(self, project: Project) -> Optional[str]:
+        try:
+            if os.path.getsize(project.dotenv) > MAX_DOTENV:
+                return None
+            with open(project.dotenv, encoding="utf-8") as file:
+                return file.read()
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    async def _replace_dotenv(self, project: Project, changes: dict[str, str], expected: dict[str, str]) -> None:
+        """Patch .env; `docker compose config` with the new file must differ only in the expected variables."""
+        own = [name for name in changes if name.startswith(("COMPOSE_", "DOCKER_"))]
+        if own:  # compose reads these itself (project name, ...): `config` with -p would not show the change
+            raise ComposeError(f"{', '.join(own)} configures Docker Compose itself; change it in .env by hand.")
+        old = await asyncio.to_thread(self._read_dotenv, project)
+        if old is None:
+            raise ComposeError(f"{project.dotenv} cannot be read.")
+        new = dotenv_patch(old, changes)
+        if new == old:
+            return
+        folder = os.path.dirname(project.dotenv)
+        temp = os.path.join(folder, ".env.gamefleet-tmp")
+        like = os.stat(project.dotenv)
+        await asyncio.to_thread(_write_like, temp, new, like)
+        try:
+            before = json.loads(await compose_cli(project, "config", "--format", "json"))
+            after = json.loads(await compose_cli(project, "config", "--format", "json", env_file=temp))
+            env_before = before["services"][project.service].pop("environment", None) or {}
+            env_after = after["services"][project.service].pop("environment", None) or {}
+            want = {**env_before, **{k: v.replace("$", "$$") for k, v in expected.items()}}
+            if env_after != want:
+                raise ComposeError("The change did not come out as intended; nothing was written. Edit .env by hand.")
+            if before != after:
+                raise ComposeError("The variable is also used elsewhere in the compose file; change it in .env by hand.")
+            backup = project.dotenv + ".gamefleet-bak"
+            await asyncio.to_thread(shutil.copy2, project.dotenv, backup)
+            if os.geteuid() == 0:
+                os.chown(backup, like.st_uid, like.st_gid)
+            os.replace(temp, project.dotenv)
+        finally:
+            if os.path.exists(temp):
+                os.unlink(temp)
+        log.info("Updated %s (backup in %s.gamefleet-bak)", project.dotenv, project.dotenv)
 
     async def read_file(self, server: GameServer) -> ComposeFile:
         project, _ = await self.project(server)
@@ -485,11 +641,12 @@ def _typed(spec: SettingSpec, value: Optional[str]) -> SettingScalar:
         return None
     if spec.type == "bool":
         return value.strip().lower() == "true"
-    if spec.type == "int":
+    if spec.type in ("int", "float"):
         try:
-            return int(value)
+            number = float(value)
         except ValueError:
             return value
+        return int(number) if spec.type == "int" and number.is_integer() else number
     return value
 
 
@@ -503,6 +660,11 @@ def _text(spec: SettingSpec, value: SettingScalar) -> str:
             return str(int(value))  # type: ignore[arg-type]
         except (TypeError, ValueError):
             raise ComposeError(f"{spec.label} must be a whole number.")
+    if spec.type == "float":
+        try:
+            return str(float(value))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            raise ComposeError(f"{spec.label} must be a number.")
     text = str(value)
     if spec.type == "enum" and spec.options and text not in spec.options:
         raise ComposeError(f"{spec.label} must be one of {', '.join(spec.options)}.")

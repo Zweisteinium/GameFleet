@@ -120,3 +120,40 @@ def test_specs_for_a_server_loaded_from_the_database():
     assert [o.env for o in specs_for(GameServer(name="v", game="valheim", address="x", port=1),
                                      "ghcr.io/lloesche/valheim-server:latest")] == [
         "SERVER_NAME", "SERVER_PUBLIC", "BACKUPS", "UPDATE_CRON"]
+
+
+DOTENV = """# Server Identity
+SESSION_NAME=Hammer, Sichel, Raptor
+SERVER_MAP=TheIsland   # comment stays
+QUOTED="a b"
+TWICE=1
+TWICE=2
+OPEN="no end
+"""
+
+
+def test_dotenv_locate_and_patch():
+    from gamefleet_backend.services.compose_service import dotenv_locate, dotenv_patch
+    places = dotenv_locate(DOTENV)
+    assert places["TWICE"] is None and places["OPEN"] is None
+    out = dotenv_patch(DOTENV, {"SESSION_NAME": "Neu & alt", "SERVER_MAP": "Ragnarok", "QUOTED": "plain"})
+    assert "SESSION_NAME='Neu & alt'" in out
+    assert "SERVER_MAP=Ragnarok   # comment stays" in out
+    assert "QUOTED=plain" in out
+    assert out.startswith("# Server Identity\n")
+    with pytest.raises(ComposeError):
+        dotenv_patch(DOTENV, {"TWICE": "3"})
+    with pytest.raises(ComposeError):
+        dotenv_patch(DOTENV, {"SESSION_NAME": "it's $HOME"})
+    with pytest.raises(ComposeError):
+        dotenv_patch(DOTENV, {"SESSION_NAME": "two\nlines"})
+
+
+def test_specs_for_the_ark_image():
+    from gamefleet_backend.db.models.game_server import GameServer
+    from gamefleet_backend.services.compose_service import specs_for
+    offered = specs_for(GameServer(name="a", game="ark_ase", address="x", port=1), "hermsi/ark-server:latest")
+    envs = [o.env for o in offered]
+    assert envs[:2] == ["SESSION_NAME", "MAX_PLAYERS"]  # mirrored from GameUserSettings.ini
+    assert {"SERVER_MAP", "SERVER_PASSWORD", "UPDATE_ON_START"} <= set(envs)
+    assert next(o for o in offered if o.env == "ADMIN_PASSWORD").spec.type == "secret"

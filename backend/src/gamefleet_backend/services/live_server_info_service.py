@@ -33,7 +33,8 @@ class LiveServerInfoService:
             if state == "starting":
                 return BaseServerInfo(status=ServerStatus.STARTING, error_message="The server is starting up")
             if state != "running":
-                message = f"The container is {state}" if state else "The container no longer exists"
+                message = ("The container is stopped" if state == "exited" else f"The container is {state}") \
+                    if state else "The container no longer exists"
                 return BaseServerInfo(status=ServerStatus.OFFLINE, error_message=message)
 
         address, port = server.address, server.port

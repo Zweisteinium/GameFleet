@@ -15,6 +15,9 @@ class ComposeSetting(SettingSpec):
     file_value: SettingScalar = None
     multiline: bool = False  # edited as a text area (MOTD)
     motd: bool = False  # a Minecraft MOTD: shown rendered below the field
+    # The .env file the value is kept in, when the compose file only refers to it as ${VAR}.
+    env_file: Optional[str] = None
+    is_set: bool = False  # for secrets, whose value is not sent: whether one is set
 
 
 class ComposeInfo(BaseModel):
