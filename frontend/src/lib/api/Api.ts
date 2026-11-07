@@ -286,7 +286,7 @@ export interface ComposeSetting {
 	/** Label */
 	label: string;
 	/** Type */
-	type: 'bool' | 'int' | 'str' | 'enum';
+	type: 'bool' | 'int' | 'float' | 'str' | 'enum' | 'secret';
 	/**
 	 * Description
 	 * @default ""
@@ -320,6 +320,13 @@ export interface ComposeSetting {
 	 * @default false
 	 */
 	motd?: boolean;
+	/** Env File */
+	env_file?: string | null;
+	/**
+	 * Is Set
+	 * @default false
+	 */
+	is_set?: boolean;
 }
 
 /** ComposeUpdate */
@@ -366,6 +373,8 @@ export interface ConfigInfo {
 	 * @default false
 	 */
 	restart_needed?: boolean;
+	/** Edit When Stopped */
+	edit_when_stopped?: string | null;
 }
 
 /** ContainerInfo */
@@ -1196,7 +1205,7 @@ export interface SettingValue {
 	/** Label */
 	label: string;
 	/** Type */
-	type: 'bool' | 'int' | 'str' | 'enum';
+	type: 'bool' | 'int' | 'float' | 'str' | 'enum' | 'secret';
 	/**
 	 * Description
 	 * @default ""
@@ -1739,7 +1748,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
 /**
  * @title Game Server Dashboard API
- * @version 2.1.0
+ * @version 2.3.0
  *
  * API for managing and monitoring game servers
  */

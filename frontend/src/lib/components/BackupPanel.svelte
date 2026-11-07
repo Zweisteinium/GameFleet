@@ -53,10 +53,11 @@
 			([a], [b]) => Number(a.startsWith('Copies')) - Number(b.startsWith('Copies'))
 		);
 	});
-	// Hundreds of backups bury the page: only the newest one is shown until asked for all.
+	// Hundreds of backups bury the page: only the newest few are shown until asked for all.
+	const NEWEST = 3;
 	let showAll = $state(false);
 	const newest = $derived(
-		backups.reduce<Backup | null>((a, b) => (!a || b.created > a.created ? b : a), null)
+		[...backups].sort((a, b) => (a.created < b.created ? 1 : a.created > b.created ? -1 : 0)).slice(0, NEWEST)
 	);
 	const busy = $derived((job != null && job.finished_at == null) || uploadProgress != null);
 	const modpack = $derived(
@@ -279,10 +280,12 @@
 				No backups found. The server's own backups are listed here once it has written some.
 			</p>
 		{:else}
-			{#if !showAll && newest}
+			{#if !showAll}
 				<p class="caption mb-1.5">Newest</p>
-				<ul class="border-line rounded-[var(--radius-control)] border">
-					{@render row(newest, true)}
+				<ul class="divide-line border-line divide-y rounded-[var(--radius-control)] border">
+					{#each newest as backup (backup.path)}
+						{@render row(backup, true)}
+					{/each}
 				</ul>
 			{:else}
 				<div class="space-y-4">
@@ -304,7 +307,7 @@
 					{/each}
 				</div>
 			{/if}
-			{#if backups.length > 1}
+			{#if backups.length > NEWEST}
 				<button class="btn-ghost btn-sm mt-2 -ml-2" onclick={() => (showAll = !showAll)}>
 					<Icon name={showAll ? 'chevron-up' : 'chevron-down'} size={14} />
 					{showAll ? 'Show only the newest' : `Show all (${backups.length})`}

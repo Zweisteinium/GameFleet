@@ -301,7 +301,8 @@ export function hostTone(state: string | undefined): Tone {
 		case 'created':
 		case 'paused':
 			return 'warning';
-		case 'exited':
+		case 'exited': // stopped on purpose as often as not: the offline badge already says it
+			return 'neutral';
 		case 'dead':
 		case 'missing':
 			return 'danger';

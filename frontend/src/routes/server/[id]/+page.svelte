@@ -15,6 +15,10 @@
 	const liveInfo = $derived(ctx.liveInfo);
 	const tiles = $derived(liveInfo ? overviewTiles(liveInfo, server.game) : []);
 	const caps = $derived(liveInfo ? capabilities(liveInfo) : null);
+	// A stopped container is not an error: the container panel above says so and offers Start.
+	const stopped = $derived(
+		ctx.isLocal && ctx.hostStats != null && ctx.hostStats.state !== 'running'
+	);
 </script>
 
 <div class="space-y-5">
@@ -44,7 +48,7 @@
 				<Icon name="refresh" size={16} class="shrink-0 animate-spin" />
 				<p>The server is starting. Live data appears once it answers.</p>
 			</div>
-		{:else if liveInfo.error_message}
+		{:else if liveInfo.error_message && !stopped}
 			<div class="notice tone-warn py-2.5">
 				<Icon name="alert" size={16} class="mt-0.5 shrink-0" />
 				<div>
@@ -92,7 +96,7 @@
 				<dl class="space-y-4">
 					{#if liveInfo.description}
 						<div>
-							<dt class="label">Description</dt>
+							<dt class="label">{isMinecraft(server.game) ? 'MOTD' : 'Description'}</dt>
 							<dd class="tile text-sm">
 								{#if isMinecraft(server.game)}
 									<MinecraftMOTD motd={liveInfo.description} />
@@ -111,7 +115,7 @@
 					{#if !liveInfo.description && !(liveInfo.game_mode && liveInfo.map_name)}
 						<p class="text-sm text-ink-3">
 							{caps?.description
-								? 'This server does not publish a description.'
+								? `This server does not publish ${isMinecraft(server.game) ? 'a MOTD' : 'a description'}.`
 								: 'This game does not publish a description.'}
 						</p>
 					{/if}

@@ -119,6 +119,13 @@
 	}
 </script>
 
+{#snippet path(icon: string, label: string, value: string, title = '')}
+	<span class="inline-flex items-baseline gap-1.5" {title}>
+		<Icon name={icon} size={13} class="self-center" />{label}
+		<span class="font-mono text-ink-2">{value}</span>
+	</span>
+{/snippet}
+
 {#snippet usageBar(usage: Usage, tone: keyof typeof bars)}
 	<!-- Solid: this server. Faded: everything running on the host. Tick: the container's limit. -->
 	<div class="track mt-1.5">
@@ -274,20 +281,11 @@
 		</div>
 
 		{#if server.world_path || server.data_path || stats?.compose_dir}
-			<!-- Icons sit 1px low to line up with the x-height of the text, not its line box. -->
-			<p class="text-ink-3 mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
-				{#if stats?.compose_dir}<span class="meta" title="Compose project {stats.compose_project ?? ''}"
-						><Icon name="box" size={13} class="translate-y-px" /><span>compose</span>
-						<span class="font-mono text-ink-2">{stats.compose_dir}</span></span
-					>{/if}
-				{#if server.data_path}<span class="meta"
-						><Icon name="folder" size={13} class="translate-y-px" /><span>data</span>
-						<span class="font-mono text-ink-2">{server.data_path}</span></span
-					>{/if}
-				{#if server.world_path}<span class="meta"
-						><Icon name="database" size={13} class="translate-y-px" /><span>world</span>
-						<span class="font-mono text-ink-2">{server.world_path}</span></span
-					>{/if}
+			<!-- Label and path share a baseline (sans and mono sit differently in a centred box); the icon is centred. -->
+			<p class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-ink-3">
+				{#if stats?.compose_dir}{@render path('box', 'compose', stats.compose_dir, `Compose project ${stats.compose_project ?? ''}`)}{/if}
+				{#if server.data_path}{@render path('folder', 'data', server.data_path)}{/if}
+				{#if server.world_path}{@render path('database', 'world', server.world_path)}{/if}
 			</p>
 		{/if}
 	{/if}

@@ -5,7 +5,7 @@
 	interface Props {
 		game: GameServerType;
 		kind?: 'poster' | 'hero';
-		/** Base64 PNG advertised by the server itself (Minecraft); shown centered inside the poster frame. */
+		/** Base64 PNG advertised by the server itself (Minecraft); shown full width inside the poster frame. */
 		serverIcon?: string | null;
 		class?: string;
 	}
@@ -48,7 +48,7 @@
 		{initials}
 	</div>
 {:else if framedSrc}
-	<!-- A blurred copy fills the frame, the icon sits centered, so squares sit next to 2:3 posters without stretching. -->
+	<!-- The icon spans the full width; a blurred copy fills the rest of the 2:3 frame above and below it. -->
 	<div class="relative overflow-hidden {className}" aria-label={label}>
 		<img
 			src={framedSrc}
@@ -60,7 +60,7 @@
 		<img
 			src={framedSrc}
 			alt={label}
-			class="image-pixelated absolute top-1/2 left-1/2 w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-[4px]"
+			class="image-pixelated absolute inset-x-0 top-1/2 w-full -translate-y-1/2"
 			onerror={() => (failed = true)}
 		/>
 	</div>

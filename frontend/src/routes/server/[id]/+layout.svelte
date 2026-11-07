@@ -371,13 +371,13 @@
 
 		{#if tabs.length > 1}
 			<nav
-				class="-mb-1 flex gap-1 overflow-x-auto border-b border-line"
+				class="flex gap-1 overflow-x-auto shadow-[inset_0_-1px_0_var(--line)]"
 				aria-label="Server sections"
 			>
 				{#each tabs as tab (tab.route)}
 					<a
 						href={resolve(tab.route, { id: serverId })}
-						class="-mb-px flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors {activeTab ===
+						class="flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors {activeTab ===
 						tab.route
 							? 'border-accent text-ink'
 							: 'border-transparent text-ink-2 hover:text-ink'}"

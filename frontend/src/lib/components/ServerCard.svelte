@@ -3,7 +3,7 @@
 	import type { LiveServerInfo } from '$lib/api/types';
 	import { resolve } from '$app/paths';
 	import { gameLabel } from '$lib/games';
-	import { formatBytes, hostStateLabel, hostTone, toneClass } from '$lib/gameinfo';
+	import { formatBytes, hostStateLabel } from '$lib/gameinfo';
 	import StatusBadge from './StatusBadge.svelte';
 	import GameArt from './GameArt.svelte';
 	import PlayersBar from './PlayersBar.svelte';
@@ -31,15 +31,16 @@
 
 {#snippet tags()}
 	{#if local}
+		<!-- Tags stay grey: the status badge is the one coloured thing on a card. -->
 		<span
-			class="pill {host ? toneClass(hostTone(host.state)) : 'tone-neutral'} h-5 px-1.5 text-[11px]"
-			title={host ? `${hostStateLabel(host)} · ${host.status}` : 'Runs in Docker on this host'}
+			class="pill tone-neutral h-5 shrink-0 px-1.5 text-[11px]"
+			title={host ? `Container ${hostStateLabel(host).toLowerCase()} · ${host.status}` : 'Runs in Docker on this host'}
 		>
 			<Icon name="box" size={11} />Docker
 		</span>
 	{/if}
 	{#if server.is_public && session.authEnabled && loggedIn()}
-		<span class="pill tone-neutral h-5 px-1.5 text-[11px]" title="Visible without signing in">
+		<span class="pill tone-neutral h-5 shrink-0 px-1.5 text-[11px]" title="Visible without signing in">
 			<Icon name="eye" size={11} />Public
 		</span>
 	{/if}
@@ -69,7 +70,7 @@
 			class="h-12 w-9 rounded-[5px] {offline ? 'grayscale' : ''}"
 		/>
 		<div class="min-w-0 flex-1">
-			<h3 class="flex items-center gap-2 truncate text-sm font-semibold">
+			<h3 class="flex items-center gap-2.5 truncate text-sm font-semibold">
 				{server.name}{@render tags()}
 			</h3>
 			<p class="text-ink-2 truncate text-xs">
@@ -109,7 +110,7 @@
 				class="h-[5.5rem] w-[3.75rem] shrink-0 rounded-[6px] {offline ? 'grayscale' : ''}"
 			/>
 			<div class="min-w-0 flex-1">
-				<div class="mb-0.5 flex items-start justify-between gap-2">
+				<div class="mb-1.5 flex items-start justify-between gap-3">
 					<h3 class="truncate text-[15px] leading-tight font-semibold">{server.name}</h3>
 					{#if liveInfo}
 						<StatusBadge
@@ -120,7 +121,7 @@
 						<Skeleton class="h-6 w-16 rounded-full" />
 					{/if}
 				</div>
-				<p class="text-ink-2 mb-3 flex min-w-0 items-center gap-1.5 text-xs">
+				<p class="text-ink-2 mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
 					<span class="truncate"
 						>{gameLabel(server.game)}{#if server.modpack_name}
 							· {server.modpack_name}{/if}</span
@@ -150,8 +151,8 @@
 		</div>
 
 		{#if liveInfo?.error_message && liveInfo.status !== ServerStatus.Starting}
-			<div class="border-line text-bad flex items-start gap-2 border-t px-4 py-2 text-xs">
-				<Icon name="alert" size={14} class="mt-0.5 shrink-0" />
+			<div class="border-line text-ink-3 flex items-start gap-2 border-t px-4 py-2 text-xs">
+				<Icon name="info" size={14} class="mt-0.5 shrink-0" />
 				<span class="line-clamp-2">{liveInfo.error_message}</span>
 			</div>
 		{/if}

@@ -33,6 +33,7 @@
 		for (const s of info?.settings ?? []) (byGroup[s.group || 'General'] ??= []).push(s);
 		return Object.entries(byGroup);
 	});
+	const usesDotenv = $derived(info?.settings?.some((s) => s.env_file) ?? false);
 	const pendingLabels = $derived(
 		(info?.pending ?? []).map((env) => info?.settings?.find((s) => s.env === env)?.label ?? env)
 	);
@@ -66,6 +67,12 @@
 	function set(s: ComposeSetting, value: Value) {
 		if (value === (baseline(s) ?? '')) delete edits[s.env];
 		else edits[s.env] = value;
+	}
+
+	function placeholder(s: ComposeSetting): string {
+		if (s.type === 'secret') return s.is_set ? '•••••••• (type to replace)' : 'not set';
+		if (s.value != null) return '';
+		return s.file_value == null ? 'image default' : String(s.file_value);
 	}
 
 	function note(s: ComposeSetting): string | null {
@@ -129,7 +136,8 @@
 			{#if info?.file}
 				<p class="hint mt-1">
 					From the environment of <span class="font-mono">{info.service}</span> in
-					<span class="font-mono">{info.file}</span>
+					<span class="font-mono">{info.file}</span>{#if usesDotenv}; values it takes from
+						<span class="font-mono">.env</span> are changed there{/if}
 				</p>
 			{/if}
 		</div>
@@ -191,11 +199,7 @@
 								edited={s.env in edits}
 								disabled={s.readonly != null}
 								note={note(s)}
-								placeholder={s.value == null
-									? s.file_value == null
-										? 'image default'
-										: String(s.file_value)
-									: ''}
+								placeholder={placeholder(s)}
 								multiline={s.multiline ?? false}
 								motd={s.motd ?? false}
 								onchange={(v) => set(s, v)}

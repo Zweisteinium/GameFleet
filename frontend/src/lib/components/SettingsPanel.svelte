@@ -29,6 +29,8 @@
 
 	const settings = $derived(info?.settings ?? []);
 	const dirty = $derived(Object.keys(edits).length > 0);
+	// ARK rewrites its files on shutdown: they can only change while it is stopped.
+	const stoppedOnly = $derived(Boolean(info?.edit_when_stopped) && running);
 	const groups = $derived.by(() => {
 		const byGroup: Record<string, SettingValue[]> = {};
 		for (const s of settings) (byGroup[s.group ?? 'General'] ??= []).push(s);
@@ -96,114 +98,118 @@
 	});
 </script>
 
-<section class="card p-5">
-	<div class="flex flex-wrap items-center justify-between gap-3 {advanced && !open ? '' : 'mb-4'}">
-		{#if advanced}
-			<button
-				class="section-title cursor-pointer"
-				onclick={() => (open = !open)}
-				aria-expanded={open}
-			>
-				<Icon
-					name={open ? 'chevron-down' : 'chevron-right'}
-					size={16}
-					class="text-ink-3"
-				/>Advanced:
-				<span class="font-mono font-normal"
-					>{info?.settings_file?.split('/').pop() ?? 'settings file'}</span
+<!-- Under compose, an empty file view is noise: it only shows when the game has a settings form. -->
+{#if !(advanced && info && (!info.supported || settings.length === 0))}
+	<section class="card p-5">
+		<div
+			class="flex flex-wrap items-center justify-between gap-3 {advanced && !open ? '' : 'mb-4'}"
+		>
+			{#if advanced}
+				<button
+					class="section-title cursor-pointer"
+					onclick={() => (open = !open)}
+					aria-expanded={open}
 				>
-			</button>
-		{:else}
-			<h2 class="section-title">
-				<Icon name="sliders" size={16} class="text-ink-3" />Settings
-				{#if info?.settings_file}
-					<span class="font-mono text-xs font-normal text-ink-3">{info.settings_file}</span>
-				{/if}
-			</h2>
-		{/if}
-		{#if info?.supported && dirty && (open || !advanced)}
-			<div class="flex items-center gap-2">
-				<button class="btn-ghost btn-sm" onclick={() => (edits = {})} disabled={saving}
-					>Discard</button
-				>
-				<button class="btn-primary btn-sm" onclick={save} disabled={saving}>
-					<Icon name="save" size={14} />{saving ? 'Saving…' : `Save ${Object.keys(edits).length}`}
+					<Icon
+						name={open ? 'chevron-down' : 'chevron-right'}
+						size={16}
+						class="text-ink-3"
+					/>Advanced:
+					<span class="font-mono font-normal"
+						>{info?.settings_file?.split('/').pop() ?? 'settings file'}</span
+					>
 				</button>
-			</div>
-		{/if}
-	</div>
-	{#if advanced && !open}
-		<p class="hint mt-1 pl-6">
-			Edits the file directly. Keys set in the compose file are rewritten by the image on every
-			start, so only the others stick here.
-		</p>
-	{/if}
-
-	{#if !advanced || open}
-		{#if advanced}
-			<p class="notice tone-warn mb-4 text-xs">
-				<Icon name="alert" size={14} class="mt-0.5 shrink-0" />The image writes the keys that are
-				set in the compose file on every start; they are locked here. Change those under Server
-				settings.
-			</p>
-		{/if}
-		{#if error || loadError}
-			<p class="notice tone-bad mb-4">
-				<Icon name="alert" size={16} class="mt-0.5 shrink-0" />{error ?? loadError}
-			</p>
-		{/if}
-
-		{#if restartNeeded}
-			<div class="notice tone-warn mb-4 items-center">
-				<Icon name="info" size={16} class="shrink-0" />
-				<span class="flex-1">
-					{running
-						? 'Saved. The server reads its settings on start, so restart it to apply them.'
-						: 'Saved. The new settings apply when the server starts.'}
-				</span>
-				{#if running}
-					<button class="btn-outline btn-sm" onclick={restart} disabled={restarting}>
-						<Icon name="rotate-cw" size={14} class={restarting ? 'animate-spin' : ''} />Restart now
+			{:else}
+				<h2 class="section-title">
+					<Icon name="sliders" size={16} class="text-ink-3" />Settings
+					{#if info?.settings_file}
+						<span class="font-mono text-xs font-normal text-ink-3">{info.settings_file}</span>
+					{/if}
+				</h2>
+			{/if}
+			{#if info?.supported && dirty && (open || !advanced) && !stoppedOnly}
+				<div class="flex items-center gap-2">
+					<button class="btn-ghost btn-sm" onclick={() => (edits = {})} disabled={saving}
+						>Discard</button
+					>
+					<button class="btn-primary btn-sm" onclick={save} disabled={saving}>
+						<Icon name="save" size={14} />{saving ? 'Saving…' : `Save ${Object.keys(edits).length}`}
 					</button>
-				{/if}
-			</div>
+				</div>
+			{/if}
+		</div>
+		{#if advanced}
+			<p class="hint {open ? '-mt-2 mb-4' : 'mt-1'} pl-6">
+				Edits the file directly. Keys the compose file sets are overwritten on every start, so they
+				are locked here.
+			</p>
 		{/if}
 
-		{#if !info}
-			{#if !loadError}<Skeleton class="h-5 w-64" />{/if}
-		{:else if !info.supported}
-			<p class="text-sm text-ink-2">{info.reason}</p>
-		{:else if settings.length === 0}
-			<p class="hint">This game keeps its settings in files only; edit them in Files.</p>
-		{:else}
-			<div class="space-y-5">
-				{#each groups as [group, items] (group)}
-					<div>
-						{#if groups.length > 1}<p class="caption mb-2">{group}</p>{/if}
-						<div class="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-							{#each items as s (s.key)}
-								<SettingField
-									id="cfg-{s.key}"
-									label={s.label}
-									type={s.type}
-									value={current(s)}
-									options={s.options ?? []}
-									description={s.description ?? ''}
-									edited={s.key in edits}
-									disabled={s.locked != null || s.env_override != null}
-									note={s.env_override
-										? `Set by ${s.env_override} in the container; change it under Server settings.`
-										: (s.locked ?? null)}
-									placeholder={current(s) == null ? 'game default' : ''}
-									multiline={s.key === 'motd'}
-									motd={s.key === 'motd' && server.game === 'minecraft'}
-									onchange={(v) => set(s, v)}
-								/>
-							{/each}
+		{#if !advanced || open}
+			{#if stoppedOnly}
+				<p class="notice tone-accent mb-4">
+					<Icon name="info" size={16} class="mt-0.5 shrink-0" />{info?.edit_when_stopped}
+				</p>
+			{/if}
+			{#if error || loadError}
+				<p class="notice tone-bad mb-4">
+					<Icon name="alert" size={16} class="mt-0.5 shrink-0" />{error ?? loadError}
+				</p>
+			{/if}
+
+			{#if restartNeeded}
+				<div class="notice tone-warn mb-4 items-center">
+					<Icon name="info" size={16} class="shrink-0" />
+					<span class="flex-1">
+						{running
+							? 'Saved. The server reads its settings on start, so restart it to apply them.'
+							: 'Saved. The new settings apply when the server starts.'}
+					</span>
+					{#if running}
+						<button class="btn-outline btn-sm" onclick={restart} disabled={restarting}>
+							<Icon name="rotate-cw" size={14} class={restarting ? 'animate-spin' : ''} />Restart
+							now
+						</button>
+					{/if}
+				</div>
+			{/if}
+
+			{#if !info}
+				{#if !loadError}<Skeleton class="h-5 w-64" />{/if}
+			{:else if !info.supported}
+				<p class="text-sm text-ink-2">{info.reason}</p>
+			{:else if settings.length === 0}
+				<p class="hint">This game keeps its settings in files only; edit them under Files.</p>
+			{:else}
+				<div class="space-y-5">
+					{#each groups as [group, items] (group)}
+						<div>
+							{#if groups.length > 1}<p class="caption mb-2">{group}</p>{/if}
+							<div class="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+								{#each items as s (s.key)}
+									<SettingField
+										id="cfg-{s.key}"
+										label={s.label}
+										type={s.type}
+										value={current(s)}
+										options={s.options ?? []}
+										description={s.description ?? ''}
+										edited={s.key in edits}
+										disabled={s.locked != null || s.env_override != null || stoppedOnly}
+										note={s.env_override
+											? `Set by ${s.env_override} in the container; change it under Server settings.`
+											: (s.locked ?? null)}
+										placeholder={current(s) == null ? 'game default' : ''}
+										multiline={s.key === 'motd' || s.key === 'MessageOfTheDay/Message'}
+										motd={s.key === 'motd' && server.game === 'minecraft'}
+										onchange={(v) => set(s, v)}
+									/>
+								{/each}
+							</div>
 						</div>
-					</div>
-				{/each}
-			</div>
+					{/each}
+				</div>
+			{/if}
 		{/if}
-	{/if}
-</section>
+	</section>
+{/if}
