@@ -39,7 +39,13 @@
 	);
 	const cpuTitle = $derived(
 		[
-			stats?.cpu_percent != null ? `${stats.cpu_percent.toFixed(1)}% of one thread, as docker stats shows it` : '',
+			// docker stats counts 100% per thread; say how many threads that is instead.
+			stats?.cpu_percent != null
+				? `This server: ${(stats.cpu_percent / 100).toFixed(1)} threads busy` +
+					(stats.cpu_limited && stats.cpu_limit
+						? ` of the ${count(stats.cpu_limit)} it may use`
+						: '')
+				: '',
 			stats?.host_threads
 				? `Host: ${stats.host_cores ? `${stats.host_cores} cores, ` : ''}${stats.host_threads} threads` +
 					(stats.host_cpu_percent != null ? `, ${stats.host_cpu_percent.toFixed(0)}% busy in total` : '')
