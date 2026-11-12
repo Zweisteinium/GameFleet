@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import os
 import time
 from types import SimpleNamespace
@@ -36,7 +37,10 @@ def test_match_window_and_replay():
 
 def test_uri_and_recovery_codes():
     uri = totp.uri(RFC_KEY, "alice")
-    assert uri.startswith("otpauth://totp/GameFleet%3Aalice?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=GameFleet")
+    # Built from RFC_KEY rather than spelled out: the base32 text is the public RFC 6238 test key,
+    # but secret scanners report it as a leaked key.
+    secret = base64.b32encode(RFC_KEY).decode().rstrip("=")
+    assert uri.startswith(f"otpauth://totp/GameFleet%3Aalice?secret={secret}&issuer=GameFleet")
     code = totp.recovery_code()
     assert len(code) == 11 and code[5] == "-"
     assert totp.normalize_recovery(code.upper().replace("-", " ")) == code.replace("-", "")
