@@ -8,7 +8,7 @@ from urllib.parse import quote
 import docker.errors
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from gamefleet_backend import auth
 from gamefleet_backend.auth import current_user, download_user, is_admin
@@ -36,6 +36,13 @@ router = APIRouter()
 LOGIN = [Depends(current_user)]
 
 
+def web_link(value: str | None) -> str | None:
+    """Links shown in the dashboard must be web pages: a javascript: or data: URL would run in the browser."""
+    if value and value.strip() and not re.match(r"https?://[^\s/]", value.strip(), re.IGNORECASE):
+        raise ValueError("must be an http:// or https:// address")
+    return value
+
+
 class GameServerCreate(BaseModel):
     name: str
     game: GameServerType
@@ -48,6 +55,11 @@ class GameServerCreate(BaseModel):
     # Typed by the user; Docker-linked servers detect their pack on their own.
     modpack_name: str | None = Field(default=None, max_length=200)
     modpack_url: str | None = Field(default=None, max_length=500)
+
+    @field_validator("modpack_url")
+    @classmethod
+    def _web_link(cls, value: str | None) -> str | None:
+        return web_link(value)
 
 
 class GameServerUpdate(BaseModel):
@@ -62,6 +74,11 @@ class GameServerUpdate(BaseModel):
     # An empty name clears a typed pack and lets detection fill it in again.
     modpack_name: str | None = Field(default=None, max_length=200)
     modpack_url: str | None = Field(default=None, max_length=500)
+
+    @field_validator("modpack_url")
+    @classmethod
+    def _web_link(cls, value: str | None) -> str | None:
+        return web_link(value)
 
 
 class PowerRequest(BaseModel):

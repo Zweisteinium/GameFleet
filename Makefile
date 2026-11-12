@@ -11,7 +11,7 @@ COMPOSE = DOCKER_REPO=$(DOCKER_REPO) VERSION=$(VERSION) docker compose
 COMPOSE_ALL = $(COMPOSE) --profile db
 
 .DEFAULT_GOAL := help
-.PHONY: help install backend frontend db check test swagger hash up down restart logs ps shell build release clean
+.PHONY: help install backend frontend db check test swagger hash reset-2fa up down restart logs ps shell build release clean
 
 ##@ Native development
 
@@ -40,6 +40,10 @@ swagger: ## Regenerate frontend/src/lib/api from the running dev backend's OpenA
 
 hash: ## Print an scrypt hash for a GAMEFLEET_USERS password (prompts for it)
 	cd backend && uv run python -m gamefleet_backend.auth hash
+
+reset-2fa: ## Remove a user's authenticator and end their sessions (make reset-2fa U=name); the next sign-in sets up a new one
+	@test -n "$(U)" || { echo "usage: make reset-2fa U=<user>"; exit 2; }
+	$(COMPOSE) exec backend python -m gamefleet_backend.auth reset-2fa "$(U)"
 
 ##@ Docker (docker-compose.yml, configured through .env)
 

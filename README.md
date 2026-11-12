@@ -61,7 +61,7 @@ volumes:
   gamefleet-postgres:
 ```
 
-Then open http://localhost:3000. Visitors see the servers you mark as public, and signing in lets you add, edit and control servers. The database is set up on the first start.
+Then open http://localhost:3000. Visitors see the servers you mark as public, and signing in lets you add, edit and control servers. The first sign-in asks you to set up an authenticator app. The database is set up on the first start.
 
 **From source:** clone the repository, `cp .env.example .env`, adjust it, then `make db` (optional Postgres container) and `make up`.
 
@@ -70,6 +70,7 @@ Then open http://localhost:3000. Visitors see the servers you mark as public, an
 - Live status, players, version, map, MOTD, mods and game-specific details for 30 games, refreshed every 30 seconds
 - Search, filters, sorting, grid and list view, light and dark theme, real game artwork
 - Public by default: visitors see the servers you mark as public, signing in unlocks the rest
+- Two-factor sign-in: password plus a code from an authenticator app, with recovery codes and "sign out everywhere"
 - Game servers in Docker on the same host are recognised automatically: start, stop, restart, CPU, memory and disk usage
 - Deploy new servers from a template: Minecraft Java and Bedrock, Factorio, Valheim and Satisfactory
 - Edit server settings in a form (`server.properties`, Factorio's server settings) or any config file in a raw editor
@@ -129,6 +130,17 @@ The result is an ordinary compose project: `docker compose up -d` in that folder
 
 The servers folder is set on the **Settings** page, together with the owner of new folders, the public address and the defaults for memory, CPU, restart policy, stop grace period and time zone. The backend needs that folder mounted **at the same path** (`docker compose` hands the paths it sees to the Docker daemon), which `docker-compose.yml` does with `GAMEFLEET_SERVERS_DIR`. Games are described by small YAML templates in `backend/src/gamefleet_backend/templates/`.
 
+## Signing in
+
+A signed-in user controls the host: GameFleet edits compose files and talks to the Docker socket. So signing in always takes two factors, the password and a six-digit code from an authenticator app (Aegis, Google Authenticator, 1Password, Bitwarden and others):
+
+- **First sign-in:** after the password, GameFleet shows a QR code. Scan it, enter the code the app shows, and save the ten recovery codes it gives you. Each of them signs you in once without the app.
+- **Sessions** last `GAMEFLEET_SESSION_HOURS` (24 by default). **Settings → Sign-in** ends all sessions of your account at once and replaces the recovery codes. Changing a user's password in `GAMEFLEET_USERS` also ends that user's sessions.
+- **Lost the app and the codes:** `make reset-2fa U=<name>` on the host (or `docker compose exec backend python -m gamefleet_backend.auth reset-2fa <name>`). The next sign-in sets up a new authenticator.
+- **Guessing:** ten wrong passwords from one address (an IPv6 /64) block it for ten minutes. Five wrong codes lock that user's second step for 15 minutes, twice as long after every further lockout. Behind a reverse proxy, set `TRUSTED_PROXIES` to its address so attempts are counted per browser.
+
+The authenticator keys are not stored: they are derived from `GAMEFLEET_SECRET`, which therefore must be set and must not change (a new secret signs everyone out and invalidates every authenticator).
+
 ## Configuration
 
 Set these in `.env` when running from source, or in the compose file:
@@ -136,10 +148,13 @@ Set these in `.env` when running from source, or in the compose file:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `GAMEFLEET_USERS` | – | Logins as `name:password,name2:password2`. `make hash` turns a password into a hash (write `$` as `$$` in `.env`) |
-| `GAMEFLEET_SECRET` | random | Signs login tokens. Without it every restart logs everyone out. Generate one with `openssl rand -hex 32` |
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | this host, `5432`, `gamefleet`, `gamefleet`, – | PostgreSQL connection |
+| `GAMEFLEET_SECRET` | – | Required with users. Signs sign-ins and derives the authenticator keys; keep it. Generate one with `openssl rand -hex 32` |
+| `GAMEFLEET_SESSION_HOURS` | `24` | How long a sign-in lasts |
+| `TRUSTED_PROXIES` | – | Reverse proxies in front of the frontend (addresses or CIDR ranges); their `X-Forwarded-For` names the browser for the sign-in limit |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `postgres` service, `5432`, `gamefleet`, `gamefleet`, – | PostgreSQL connection. With `DB_HOST` unset, the backend uses the compose service and `DB_PORT` is only where it is published |
 | `DATABASE_URL` | – | Full connection URL that replaces the `DB_*` values, e.g. `postgresql+asyncpg://gamefleet:secret@db.example.com:5432/gamefleet` |
 | `FRONTEND_PORT`, `BACKEND_PORT` | `3000`, `8000` | Published ports when running from source. Browsers only need the frontend |
+| `FRONTEND_BIND`, `BACKEND_BIND`, `DB_BIND` | `0.0.0.0`, `127.0.0.1`, `127.0.0.1` | Host addresses those ports are published on |
 | `GAMEFLEET_SERVERS_DIR` | `/srv/gameservers` | Host folder new servers are created in, mounted into the backend at the same path. The Settings page can point to another folder below the mount |
 | `DOCKER_SERVER_ADDRESS` | `host.docker.internal` | Address GameFleet uses to reach game servers in Docker |
 | `GAMEFLEET_DEV` | `false` | Development mode with API docs at `/swagger` and verbose logs. Not meant for production |

@@ -1,7 +1,7 @@
 # GameFleet: `make up` builds the images from source, `docker compose pull && docker compose up -d` runs the
 # published ones. Everything is configured through .env (see .env.example). The browser only talks to the
-# frontend, which forwards /api to the backend, so only FRONTEND_PORT has to be reachable; BACKEND_PORT exposes
-# the API directly (with its Swagger UI when GAMEFLEET_DEV=true).
+# frontend, which forwards /api to the backend, so only FRONTEND_PORT has to be reachable. The backend and
+# database ports are published on 127.0.0.1 only (BACKEND_BIND, DB_BIND), for tools on this host.
 name: gamefleet
 
 services:
@@ -15,9 +15,10 @@ services:
     environment:
       # true serves the API docs, logs verbosely and shows a banner in the dashboard; not for production.
       GAMEFLEET_DEV: ${GAMEFLEET_DEV:-false}
-      # Unset DB_HOST means the Postgres published on this host (make db or your own); native dev uses localhost.
-      DB_HOST: ${DB_HOST:-host.docker.internal}
-      DB_PORT: ${DB_PORT:-5432}
+      # Unset DB_HOST means the postgres service below (make db), reached inside the compose network on its
+      # own port; DB_PORT is then only the port it is published on for native development.
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_HOST:+${DB_PORT:-5432}}
       DB_NAME: ${DB_NAME:-gamefleet}
       DB_USER: ${DB_USER:-gamefleet}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -25,6 +26,8 @@ services:
       # Login: "name:password,name2:password2" (plain or scrypt hashes from `make hash`; escape $ as $$ in .env).
       GAMEFLEET_USERS: ${GAMEFLEET_USERS:-}
       GAMEFLEET_SECRET: ${GAMEFLEET_SECRET:-}
+      # Hours a sign-in lasts; then password and code again.
+      GAMEFLEET_SESSION_HOURS: ${GAMEFLEET_SESSION_HOURS:-24}
       # Game-server containers on this host (needs the socket mount below) are reached through the Docker host.
       DOCKER_SERVER_ADDRESS: ${DOCKER_SERVER_ADDRESS:-host.docker.internal}
       # Folder that new game servers are created in, as <folder>/<game>/<name>/ (changeable in Settings).
@@ -32,7 +35,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${BACKEND_BIND:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
     volumes:
       - gamefleet-assets:/app/data/assets
       # Lets GameFleet find, control and measure game-server containers. The socket is root-equivalent
@@ -50,8 +53,11 @@ services:
     restart: unless-stopped
     environment:
       BACKEND_URL: http://backend:8000
+      # Reverse proxies in front of GameFleet whose X-Forwarded-For names the browser (addresses or CIDR
+      # ranges, comma-separated), so sign-in attempts are limited per browser, not per proxy.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_BIND:-0.0.0.0}:${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - backend
 
@@ -66,7 +72,7 @@ services:
       POSTGRES_USER: ${DB_USER:-gamefleet}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_BIND:-127.0.0.1}:${DB_PORT:-5432}:5432"
     volumes:
       - gamefleet-postgres:/var/lib/postgresql/data
 

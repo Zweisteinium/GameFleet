@@ -1,4 +1,5 @@
 import { api } from '$lib/api/ApiService';
+import type { LoginResult } from '$lib/api/Api';
 
 const TOKEN_KEY = 'gamefleet:token';
 
@@ -65,8 +66,22 @@ export async function checkSession(): Promise<void> {
 	}
 }
 
-export async function login(username: string, password: string): Promise<void> {
-	const result = (await api.login.login({ username, password })).data;
+/**
+ * First step of signing in: the password. The answer is never a session yet but a challenge, either for a
+ * code from the authenticator (`totp`) or, without one, for setting one up (`enroll`, with the QR data).
+ */
+export async function login(username: string, password: string): Promise<LoginResult> {
+	return (await api.login.login({ username, password })).data;
+}
+
+/** Second step: a code (or recovery code) for the challenge. On success the result carries the token. */
+export async function secondFactor(challenge: string, code: string): Promise<LoginResult> {
+	return (await api.login.loginSecondFactor({ challenge, code })).data;
+}
+
+/** Start the session from a successful second step. */
+export function signIn(result: LoginResult) {
+	if (result.status !== 'ok' || !result.token) return;
 	session.token = result.token;
 	session.username = result.username;
 	session.admin = true;
@@ -78,5 +93,11 @@ export async function login(username: string, password: string): Promise<void> {
 }
 
 export function logout() {
+	clearSession();
+}
+
+/** End every session of this user on the server, this one included. */
+export async function logoutEverywhere(): Promise<void> {
+	await api.logoutAll.logoutEverywhere();
 	clearSession();
 }

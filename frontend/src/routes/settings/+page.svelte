@@ -2,9 +2,10 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/ApiService';
 	import type { SettingsView } from '$lib/api/Api';
-	import { loggedIn } from '$lib/auth.svelte';
+	import { loggedIn, session } from '$lib/auth.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import SecurityPanel from '$lib/components/SecurityPanel.svelte';
 
 	let settings = $state<SettingsView | null>(null);
 	let cpuLimit = $state<number | null>(null);
@@ -58,7 +59,9 @@
 
 <div class="mx-auto max-w-2xl pt-6">
 	<h1 class="mb-1 text-2xl font-semibold">Settings</h1>
-	<p class="mb-6 text-sm text-ink-2">Where new servers are created and what they start with.</p>
+	<p class="mb-6 text-sm text-ink-2">
+		Where new servers are created, what they start with, and how you sign in.
+	</p>
 
 	{#if !loggedIn()}
 		<p class="card p-6 text-sm text-ink-2">Sign in to change the settings.</p>
@@ -208,5 +211,9 @@
 				>
 			</div>
 		</form>
+	{/if}
+
+	{#if loggedIn() && session.authEnabled}
+		<div class="mt-6"><SecurityPanel /></div>
 	{/if}
 </div>

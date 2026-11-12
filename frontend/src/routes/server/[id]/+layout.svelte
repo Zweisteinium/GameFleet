@@ -313,7 +313,8 @@
 								<span class="font-medium">{server.modpack_name}</span>
 								{#if server.modpack_version}<span class="text-ink-3">{server.modpack_version}</span
 									>{/if}
-								{#if server.modpack_url}
+								<!-- Only web links: a javascript: URL stored in the database would run on click. -->
+								{#if server.modpack_url && /^https?:\/\//i.test(server.modpack_url)}
 									<a
 										href={server.modpack_url}
 										target="_blank"

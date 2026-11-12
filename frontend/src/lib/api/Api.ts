@@ -238,6 +238,15 @@ export interface BaseServerInfo {
 	error_message?: string | null;
 }
 
+/** CodeRequest */
+export interface CodeRequest {
+	/**
+	 * Code
+	 * @maxLength 40
+	 */
+	code: string;
+}
+
 /** ComposeFile */
 export interface ComposeFile {
 	/** Path */
@@ -952,20 +961,41 @@ export interface ImportRequest {
 
 /** LoginRequest */
 export interface LoginRequest {
-	/** Username */
+	/**
+	 * Username
+	 * @maxLength 200
+	 */
 	username: string;
-	/** Password */
+	/**
+	 * Password
+	 * @maxLength 1000
+	 */
 	password: string;
 }
 
-/** LoginResponse */
-export interface LoginResponse {
-	/** Token */
-	token: string;
+/**
+ * LoginResult
+ * `totp`: send a code with the challenge to `loginSecondFactor`. `enroll`: no authenticator yet; show
+ * `totp_uri` as a QR code (or `totp_secret` to type in) and send its first code with the challenge.
+ * `ok`: signed in with `token`; after an enrollment `recovery_codes` holds the codes, shown only this once.
+ */
+export interface LoginResult {
+	/** Status */
+	status: 'ok' | 'totp' | 'enroll';
 	/** Username */
 	username: string;
+	/** Token */
+	token?: string | null;
 	/** Expires At */
-	expires_at: number;
+	expires_at?: number | null;
+	/** Challenge */
+	challenge?: string | null;
+	/** Totp Secret */
+	totp_secret?: string | null;
+	/** Totp Uri */
+	totp_uri?: string | null;
+	/** Recovery Codes */
+	recovery_codes?: string[] | null;
 }
 
 /**
@@ -1113,6 +1143,12 @@ export interface PowerRequest {
 	stop_conflicting?: boolean;
 }
 
+/** RecoveryCodes */
+export interface RecoveryCodes {
+	/** Recovery Codes */
+	recovery_codes: string[];
+}
+
 /** RecreateRequest */
 export interface RecreateRequest {
 	/**
@@ -1184,6 +1220,30 @@ export interface SatisfactoryServerInfo {
 	avg_tick_rate?: number | null;
 	/** Is Paused */
 	is_paused?: boolean | null;
+}
+
+/** SecondFactorRequest */
+export interface SecondFactorRequest {
+	/**
+	 * Challenge
+	 * @maxLength 2000
+	 */
+	challenge: string;
+	/**
+	 * Code
+	 * @maxLength 40
+	 */
+	code: string;
+}
+
+/** SecurityInfo */
+export interface SecurityInfo {
+	/** Totp Enabled */
+	totp_enabled: boolean;
+	/** Recovery Codes Left */
+	recovery_codes_left: number;
+	/** Session Hours */
+	session_hours: number;
 }
 
 /** SessionInfo */
@@ -1748,7 +1808,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
 /**
  * @title Game Server Dashboard API
- * @version 2.3.1
+ * @version 2.4.0
  *
  * API for managing and monitoring game servers
  */
@@ -1866,7 +1926,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
 
 	login = {
 		/**
-		 * @description Exchange username and password for a bearer token. Ten failures from one address block it for ten minutes (429 with Retry-After).
+		 * @description First step: the password. Answers with a challenge for the second factor, never with a session. Ten failures from one address (an IPv6 /64) block it for ten minutes (429 with Retry-After).
 		 *
 		 * @tags auth
 		 * @name Login
@@ -1874,8 +1934,26 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
 		 * @request POST:/api/auth/login
 		 */
 		login: (data: LoginRequest, params: RequestParams = {}) =>
-			this.request<LoginResponse, HTTPValidationError>({
+			this.request<LoginResult, HTTPValidationError>({
 				path: `/api/auth/login`,
+				method: 'POST',
+				body: data,
+				type: ContentType.Json,
+				format: 'json',
+				...params
+			}),
+
+		/**
+		 * @description Second step: a code from the authenticator (or a recovery code) for the challenge from `login`. Five wrong codes lock the user's second step for 15 minutes, doubling with every further lockout.
+		 *
+		 * @tags auth
+		 * @name LoginSecondFactor
+		 * @summary Login Second Factor
+		 * @request POST:/api/auth/login/totp
+		 */
+		loginSecondFactor: (data: SecondFactorRequest, params: RequestParams = {}) =>
+			this.request<LoginResult, HTTPValidationError>({
+				path: `/api/auth/login/totp`,
 				method: 'POST',
 				body: data,
 				type: ContentType.Json,
@@ -1899,6 +1977,64 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
 				method: 'GET',
 				secure: true,
 				format: 'json',
+				...params
+			})
+	};
+	security = {
+		/**
+		 * @description Second factor and session length of the signed-in user.
+		 *
+		 * @tags auth
+		 * @name GetSecurity
+		 * @summary Security
+		 * @request GET:/api/auth/security
+		 * @secure
+		 */
+		getSecurity: (params: RequestParams = {}) =>
+			this.request<SecurityInfo, any>({
+				path: `/api/auth/security`,
+				method: 'GET',
+				secure: true,
+				format: 'json',
+				...params
+			})
+	};
+	recoveryCodes = {
+		/**
+		 * @description Replace all recovery codes. Needs a current code from the authenticator.
+		 *
+		 * @tags auth
+		 * @name RenewRecoveryCodes
+		 * @summary Renew Recovery Codes
+		 * @request POST:/api/auth/recovery-codes
+		 * @secure
+		 */
+		renewRecoveryCodes: (data: CodeRequest, params: RequestParams = {}) =>
+			this.request<RecoveryCodes, HTTPValidationError>({
+				path: `/api/auth/recovery-codes`,
+				method: 'POST',
+				body: data,
+				secure: true,
+				type: ContentType.Json,
+				format: 'json',
+				...params
+			})
+	};
+	logoutAll = {
+		/**
+		 * @description End every session of the signed-in user, this one included.
+		 *
+		 * @tags auth
+		 * @name LogoutEverywhere
+		 * @summary Logout Everywhere
+		 * @request POST:/api/auth/logout-all
+		 * @secure
+		 */
+		logoutEverywhere: (params: RequestParams = {}) =>
+			this.request<void, any>({
+				path: `/api/auth/logout-all`,
+				method: 'POST',
+				secure: true,
 				...params
 			})
 	};

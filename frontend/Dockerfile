@@ -19,4 +19,6 @@ COPY --from=build /app/package.json ./
 # BODY_SIZE_LIMIT: backup uploads pass through the proxy; the adapter's default would cap them at 512 KiB.
 ENV NODE_ENV=production PORT=3000 BODY_SIZE_LIMIT=Infinity
 EXPOSE 3000
+# The server needs no privileges: the image's unprivileged "node" user runs it.
+USER node
 CMD ["node", "build"]
