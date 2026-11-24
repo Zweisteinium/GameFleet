@@ -28,6 +28,8 @@ services:
       GAMEFLEET_SECRET: ${GAMEFLEET_SECRET:-}
       # Hours a sign-in lasts; then password and code again.
       GAMEFLEET_SESSION_HOURS: ${GAMEFLEET_SESSION_HOURS:-24}
+      # Address of the dashboard, so `make invite` prints a complete link.
+      GAMEFLEET_URL: ${GAMEFLEET_URL:-}
       # Game-server containers on this host (needs the socket mount below) are reached through the Docker host.
       DOCKER_SERVER_ADDRESS: ${DOCKER_SERVER_ADDRESS:-host.docker.internal}
       # Folder that new game servers are created in, as <folder>/<game>/<name>/ (changeable in Settings).

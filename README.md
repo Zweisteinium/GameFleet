@@ -139,6 +139,18 @@ A signed-in user controls the host: GameFleet edits compose files and talks to t
 - **Lost the app and the codes:** `make reset-2fa U=<name>` on the host (or `docker compose exec backend python -m gamefleet_backend.auth reset-2fa <name>`). The next sign-in sets up a new authenticator.
 - **Guessing:** ten wrong passwords from one address (an IPv6 /64) block it for ten minutes. Five wrong codes lock that user's second step for 15 minutes, twice as long after every further lockout. Behind a reverse proxy, set `TRUSTED_PROXIES` to its address so attempts are counted per browser.
 
+### More users
+
+Users other than those in `GAMEFLEET_USERS` are invited from the host. User management stays out of the dashboard on purpose:
+
+```sh
+make invite U=alex        # prints a one-time link, valid for 24 hours
+make users                # who exists, who has an authenticator, which invites are open
+make remove-user U=alex   # deletes an invited user; their sessions end within seconds
+```
+
+Whoever opens the link chooses the password and sets up the authenticator in one go, and gets the recovery codes. Both take effect only once the first code is confirmed, so a half-finished invite changes nothing, and nobody else can set up that account in the meantime. Send the link only to that person. Inviting an existing invited user again lets them set a new password and authenticator; the old ones keep working until they do. Set `GAMEFLEET_URL` so the command prints the whole link. Invited users live in the database, so none of this needs a restart.
+
 The authenticator keys are not stored: they are derived from `GAMEFLEET_SECRET`, which therefore must be set and must not change (a new secret signs everyone out and invalidates every authenticator).
 
 ## Configuration
@@ -150,6 +162,7 @@ Set these in `.env` when running from source, or in the compose file:
 | `GAMEFLEET_USERS` | – | Logins as `name:password,name2:password2`. `make hash` turns a password into a hash (write `$` as `$$` in `.env`) |
 | `GAMEFLEET_SECRET` | – | Required with users. Signs sign-ins and derives the authenticator keys; keep it. Generate one with `openssl rand -hex 32` |
 | `GAMEFLEET_SESSION_HOURS` | `24` | How long a sign-in lasts |
+| `GAMEFLEET_URL` | – | The dashboard's address as browsers reach it, e.g. `https://games.example.com`. Only used to print invite links |
 | `TRUSTED_PROXIES` | – | Reverse proxies in front of the frontend (addresses or CIDR ranges); their `X-Forwarded-For` names the browser for the sign-in limit |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `postgres` service, `5432`, `gamefleet`, `gamefleet`, – | PostgreSQL connection. With `DB_HOST` unset, the backend uses the compose service and `DB_PORT` is only where it is published |
 | `DATABASE_URL` | – | Full connection URL that replaces the `DB_*` values, e.g. `postgresql+asyncpg://gamefleet:secret@db.example.com:5432/gamefleet` |

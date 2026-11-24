@@ -51,6 +51,11 @@ LEGACY_SCHEMA_UPGRADES = [
     "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS template VARCHAR(50)",
     "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS compose_file VARCHAR(400)",
     "ALTER TABLE gameserver ADD COLUMN IF NOT EXISTS compose_hash VARCHAR(64)",
+    # 2.5: invited users.
+    "ALTER TABLE usersecurity ADD COLUMN IF NOT EXISTS password_hash VARCHAR(200)",
+    "ALTER TABLE usersecurity ADD COLUMN IF NOT EXISTS invite_hash VARCHAR(64)",
+    "ALTER TABLE usersecurity ADD COLUMN IF NOT EXISTS invite_expires BIGINT NOT NULL DEFAULT 0",
+    "ALTER TABLE usersecurity ADD COLUMN IF NOT EXISTS invite_password VARCHAR(200)",
 ]
 
 

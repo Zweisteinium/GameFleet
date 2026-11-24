@@ -4,10 +4,12 @@
 	import { resolve } from '$app/paths';
 	import type { LoginResult } from '$lib/api/Api';
 	import { login, loggedIn, secondFactor, signIn } from '$lib/auth.svelte';
+	import AuthenticatorSetup from '$lib/components/AuthenticatorSetup.svelte';
+	import AuthHeader from '$lib/components/AuthHeader.svelte';
+	import CodeInput from '$lib/components/CodeInput.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import Logo from '$lib/components/Logo.svelte';
-	import QrCode from '$lib/components/QrCode.svelte';
-	import RecoveryCodes from '$lib/components/RecoveryCodes.svelte';
+	import KnownUser from '$lib/components/KnownUser.svelte';
+	import RecoveryStep from '$lib/components/RecoveryStep.svelte';
 
 	/** password → code (authenticator set up) or enroll (set one up) → recovery (after enrolling). */
 	type Step = 'password' | 'code' | 'enroll' | 'recovery';
@@ -16,9 +18,9 @@
 	let username = $state('');
 	let password = $state('');
 	let code = $state('');
+	let useRecovery = $state(false);
 	let challenge = $state<LoginResult | null>(null);
 	let done = $state<LoginResult | null>(null);
-	let saved = $state(false);
 	let error = $state<string | null>(null);
 	let busy = $state(false);
 
@@ -47,6 +49,7 @@
 		step = 'password';
 		challenge = null;
 		code = '';
+		useRecovery = false;
 		password = '';
 		error = message;
 	}
@@ -69,7 +72,8 @@
 
 	async function submitCode(event: SubmitEvent) {
 		event.preventDefault();
-		if (!challenge?.challenge) return;
+		// The code field submits by itself once complete; a request already under way wins.
+		if (!challenge?.challenge || busy) return;
 		busy = true;
 		error = null;
 		try {
@@ -91,41 +95,16 @@
 		}
 	}
 
-	/** The base32 key in groups of four, easier to type into an app by hand. */
-	const groupedSecret = $derived((challenge?.totp_secret ?? '').replace(/(.{4})/g, '$1 ').trim());
+	function toggleRecovery() {
+		useRecovery = !useRecovery;
+		code = '';
+		error = null;
+	}
 </script>
 
 <svelte:head>
 	<title>Sign in · GameFleet</title>
 </svelte:head>
-
-{#snippet header(title: string, subtitle: string)}
-	<div class="mb-6 flex items-center gap-3">
-		<Logo size={26} class="text-accent" />
-		<div>
-			<h1 class="text-lg font-semibold">{title}</h1>
-			<p class="text-sm text-ink-2">{subtitle}</p>
-		</div>
-	</div>
-{/snippet}
-
-{#snippet codeField(label: string, hint: string)}
-	<div>
-		<label class="label" for="login-code">{label}</label>
-		<input
-			id="login-code"
-			class="input text-center font-mono text-lg tracking-[0.3em]"
-			type="text"
-			inputmode={step === 'enroll' ? 'numeric' : 'text'}
-			autocomplete="one-time-code"
-			maxlength="20"
-			bind:value={code}
-			required
-			{@attach (input) => input.focus()}
-		/>
-		<p class="hint mt-1.5">{hint}</p>
-	</div>
-{/snippet}
 
 {#snippet failure()}
 	{#if error}
@@ -138,12 +117,13 @@
 <div class="grid min-h-[70vh] place-items-center py-10">
 	{#if step === 'password'}
 		<form class="card rise w-full max-w-sm p-6" onsubmit={submitPassword}>
-			{@render header('Sign in', 'to manage your servers')}
+			<AuthHeader title="Sign in" subtitle="to manage your servers" />
 			<div class="space-y-4">
 				<div>
 					<label class="label" for="login-user">Username</label>
 					<input
 						id="login-user"
+						name="username"
 						class="input"
 						type="text"
 						bind:value={username}
@@ -155,6 +135,7 @@
 					<label class="label" for="login-pass">Password</label>
 					<input
 						id="login-pass"
+						name="password"
 						class="input"
 						type="password"
 						bind:value={password}
@@ -167,81 +148,72 @@
 			<button type="submit" class="btn-primary mt-6 w-full" disabled={busy}>
 				{busy ? 'Checking…' : 'Continue'}
 			</button>
-			<p class="hint mt-4 text-center">
-				Users are configured with <code class="font-mono">GAMEFLEET_USERS</code> on the backend.
-			</p>
 		</form>
-	{:else if step === 'code'}
+	{:else if step === 'code' && challenge}
 		<form class="card rise w-full max-w-sm p-6" onsubmit={submitCode}>
-			{@render header('Two-factor sign-in', `Signing in as ${challenge?.username}`)}
-			{@render codeField(
-				'Code from your authenticator app',
-				'Lost the app? Enter one of your recovery codes instead.'
-			)}
+			<KnownUser username={challenge.username} />
+			<AuthHeader title="Two-factor sign-in" subtitle={`Signing in as ${challenge.username}`} />
+			{#if useRecovery}
+				<label class="label" for="recovery-code">Recovery code</label>
+				<input
+					id="recovery-code"
+					class="input font-mono tracking-wider"
+					type="text"
+					autocomplete="off"
+					autocapitalize="off"
+					spellcheck="false"
+					data-bwignore
+					placeholder="xxxxx-xxxxx"
+					maxlength="20"
+					bind:value={code}
+					required
+					{@attach (input) => input.focus()}
+				/>
+				<p class="hint mt-1.5">Each recovery code works once.</p>
+			{:else}
+				<p class="label mb-3 text-center">Code from your authenticator app</p>
+				<div class="flex justify-center">
+					<CodeInput bind:value={code} disabled={busy} autofocus />
+				</div>
+			{/if}
 			{@render failure()}
-			<button type="submit" class="btn-primary mt-6 w-full" disabled={busy || !code.trim()}>
+			<button
+				type="submit"
+				class="btn-primary mt-6 w-full"
+				disabled={busy || (useRecovery ? !code.trim() : code.length < 6)}
+			>
 				{busy ? 'Signing in…' : 'Sign in'}
 			</button>
-			<button
-				type="button"
-				class="btn-ghost mt-2 w-full"
-				onclick={() => restart('')}
-				disabled={busy}
-			>
-				Back
-			</button>
+			<div class="mt-3 flex items-center justify-between">
+				<button type="button" class="btn-ghost btn-sm" onclick={() => restart('')} disabled={busy}
+					>Back</button
+				>
+				<button type="button" class="btn-ghost btn-sm" onclick={toggleRecovery} disabled={busy}>
+					{useRecovery ? 'Use the authenticator app' : 'Use a recovery code'}
+				</button>
+			</div>
 		</form>
-	{:else if step === 'enroll'}
+	{:else if step === 'enroll' && challenge}
 		<form class="card rise w-full max-w-md p-6" onsubmit={submitCode}>
-			{@render header('Set up two-factor sign-in', `Required for ${challenge?.username}`)}
-			<ol class="space-y-4 text-sm">
-				<li>
-					<p class="mb-3">
-						1. Scan this code with an authenticator app (Aegis, Google Authenticator, 1Password,
-						Bitwarden …).
-					</p>
-					<div class="flex flex-col items-center gap-3">
-						{#if challenge?.totp_uri}<QrCode
-								value={challenge.totp_uri}
-								label="QR code for the authenticator app"
-							/>{/if}
-						<details class="w-full text-center">
-							<summary class="hint">Can't scan it? Enter the key by hand</summary>
-							<p class="mt-2 font-mono text-sm break-all select-all">{groupedSecret}</p>
-							<p class="hint mt-1">Time-based, 6 digits, 30 seconds.</p>
-						</details>
-					</div>
-				</li>
-				<li>
-					<p class="mb-3">2. Enter the 6-digit code the app shows to confirm it works.</p>
-					{@render codeField('Code', 'This code finishes the setup and signs you in.')}
-				</li>
-			</ol>
+			<KnownUser username={challenge.username} />
+			<AuthHeader
+				title="Set up two-factor sign-in"
+				subtitle={`Required for ${challenge.username}`}
+			/>
+			<AuthenticatorSetup {challenge} bind:code disabled={busy} />
 			{@render failure()}
-			<button type="submit" class="btn-primary mt-6 w-full" disabled={busy || !code.trim()}>
+			<button type="submit" class="btn-primary mt-6 w-full" disabled={busy || code.length < 6}>
 				{busy ? 'Checking…' : 'Confirm and sign in'}
 			</button>
 		</form>
 	{:else if step === 'recovery' && done}
 		<div class="card rise w-full max-w-md p-6">
-			{@render header('Save your recovery codes', 'Shown only this once')}
-			<p class="mb-4 text-sm text-ink-2">
-				If you lose your phone, each of these codes signs you in once instead of the app. Keep them
-				somewhere safe, apart from your password.
-			</p>
-			<RecoveryCodes codes={done.recovery_codes ?? []} username={done.username} />
-			<label class="mt-5 flex items-center gap-2.5 text-sm">
-				<input type="checkbox" class="h-4 w-4 accent-accent" bind:checked={saved} />
-				I have saved these codes
-			</label>
-			<button
-				type="button"
-				class="btn-primary mt-5 w-full"
-				disabled={!saved}
-				onclick={() => done && finish(done)}
-			>
-				Continue to GameFleet
-			</button>
+			<AuthHeader title="Save your recovery codes" subtitle="Shown only this once" />
+			<RecoveryStep
+				codes={done.recovery_codes ?? []}
+				username={done.username}
+				onfinish={() => done && finish(done)}
+			/>
 		</div>
 	{/if}
 </div>

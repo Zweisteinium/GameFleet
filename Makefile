@@ -41,6 +41,17 @@ swagger: ## Regenerate frontend/src/lib/api from the running dev backend's OpenA
 hash: ## Print an scrypt hash for a GAMEFLEET_USERS password (prompts for it)
 	cd backend && uv run python -m gamefleet_backend.auth hash
 
+invite: ## Print a one-time link (24 h) with which a new user sets a password and an authenticator (make invite U=name)
+	@test -n "$(U)" || { echo "usage: make invite U=<user>"; exit 2; }
+	@$(COMPOSE) exec backend python -m gamefleet_backend.auth invite "$(U)"
+
+users: ## List the users, their authenticator and open invites
+	@$(COMPOSE) exec backend python -m gamefleet_backend.auth users
+
+remove-user: ## Delete an invited user and end their sessions (make remove-user U=name)
+	@test -n "$(U)" || { echo "usage: make remove-user U=<user>"; exit 2; }
+	@$(COMPOSE) exec backend python -m gamefleet_backend.auth remove-user "$(U)"
+
 reset-2fa: ## Remove a user's authenticator and end their sessions (make reset-2fa U=name); the next sign-in sets up a new one
 	@test -n "$(U)" || { echo "usage: make reset-2fa U=<user>"; exit 2; }
 	$(COMPOSE) exec backend python -m gamefleet_backend.auth reset-2fa "$(U)"

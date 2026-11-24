@@ -62,6 +62,20 @@ export enum GameServerType {
 	Steam = 'steam'
 }
 
+/** AcceptInviteRequest */
+export interface AcceptInviteRequest {
+	/**
+	 * Token
+	 * @maxLength 200
+	 */
+	token: string;
+	/**
+	 * Password
+	 * @maxLength 1000
+	 */
+	password: string;
+}
+
 /**
  * ArkServerInfo
  * ARK-specific server information (Survival Evolved and Survival Ascended).
@@ -959,6 +973,25 @@ export interface ImportRequest {
 	name?: string | null;
 }
 
+/** InviteInfo */
+export interface InviteInfo {
+	/** Username */
+	username: string;
+	/** Expires At */
+	expires_at: number;
+	/** Password Min Length */
+	password_min_length: number;
+}
+
+/** InviteRequest */
+export interface InviteRequest {
+	/**
+	 * Token
+	 * @maxLength 200
+	 */
+	token: string;
+}
+
 /** LoginRequest */
 export interface LoginRequest {
 	/**
@@ -1808,7 +1841,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
 /**
  * @title Game Server Dashboard API
- * @version 2.4.0
+ * @version 2.5.0
  *
  * API for managing and monitoring game servers
  */
@@ -1944,7 +1977,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
 			}),
 
 		/**
-		 * @description Second step: a code from the authenticator (or a recovery code) for the challenge from `login`. Five wrong codes lock the user's second step for 15 minutes, doubling with every further lockout.
+		 * @description Second step: a code from the authenticator (or a recovery code) for the challenge from `login`, or the first code of the new authenticator for the challenge from `acceptInvite`. Five wrong codes lock the user's second step for 15 minutes, doubling with every further lockout.
 		 *
 		 * @tags auth
 		 * @name LoginSecondFactor
@@ -1954,6 +1987,43 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
 		loginSecondFactor: (data: SecondFactorRequest, params: RequestParams = {}) =>
 			this.request<LoginResult, HTTPValidationError>({
 				path: `/api/auth/login/totp`,
+				method: 'POST',
+				body: data,
+				type: ContentType.Json,
+				format: 'json',
+				...params
+			})
+	};
+	invite = {
+		/**
+		 * @description Who an invite link is for. 410 for a link that is unknown, used, replaced or expired; such attempts count towards the per-address sign-in limit.
+		 *
+		 * @tags auth
+		 * @name GetInvite
+		 * @summary Get Invite
+		 * @request POST:/api/auth/invite
+		 */
+		getInvite: (data: InviteRequest, params: RequestParams = {}) =>
+			this.request<InviteInfo, HTTPValidationError>({
+				path: `/api/auth/invite`,
+				method: 'POST',
+				body: data,
+				type: ContentType.Json,
+				format: 'json',
+				...params
+			}),
+
+		/**
+		 * @description Choose the password for an invite. Answers like `login` for a user without authenticator (`enroll` with QR data); the password and the authenticator take effect once `loginSecondFactor` accepts the first code. 400 for a password that is too weak, 410 for an unusable invite.
+		 *
+		 * @tags auth
+		 * @name AcceptInvite
+		 * @summary Accept Invite
+		 * @request POST:/api/auth/invite/accept
+		 */
+		acceptInvite: (data: AcceptInviteRequest, params: RequestParams = {}) =>
+			this.request<LoginResult, HTTPValidationError>({
+				path: `/api/auth/invite/accept`,
 				method: 'POST',
 				body: data,
 				type: ContentType.Json,

@@ -10,7 +10,9 @@
 
 	let { children } = $props();
 
-	const onLoginPage = $derived(page.url.pathname.startsWith('/login'));
+	const onLoginPage = $derived(
+		page.url.pathname.startsWith('/login') || page.url.pathname.startsWith('/invite')
+	);
 
 	// No route guard: visitors without a login get the public view of every page.
 	const loginHref = $derived(

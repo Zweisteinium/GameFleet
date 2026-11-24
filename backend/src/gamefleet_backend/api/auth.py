@@ -1,7 +1,6 @@
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from gamefleet_backend import auth, totp
@@ -34,6 +33,22 @@ class LoginResult(BaseModel):
     totp_secret: Optional[str] = None
     totp_uri: Optional[str] = None
     recovery_codes: Optional[list[str]] = None
+
+
+class InviteRequest(BaseModel):
+    # The token from the invite link (the part after '#').
+    token: str = Field(max_length=200)
+
+
+class InviteInfo(BaseModel):
+    username: str
+    expires_at: int  # unix seconds
+    password_min_length: int
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str = Field(max_length=200)
+    password: str = Field(max_length=1000)
 
 
 class SessionInfo(BaseModel):
@@ -78,29 +93,33 @@ async def login(body: LoginRequest, request: Request):
     if wait := auth.login_blocked(client):
         raise _too_many(wait, "failed sign-ins")
     username = body.username.strip()
-    user = await run_in_threadpool(auth.authenticate, username, body.password)
+    user = await auth.authenticate(username, body.password)
     if user is None:
         auth.login_failed(client)
         auth.log.warning("Failed login for user %r from %s", username, client)
         raise HTTPException(status_code=401, detail="Wrong username or password")
     enabled, _ = await auth.security_state(user.name)
     if enabled:
-        challenge, expires_at = auth.create_challenge(user.name)
+        challenge, expires_at = await auth.create_challenge(user.name)
         return LoginResult(status="totp", username=user.name, challenge=challenge, expires_at=expires_at)
-    challenge, expires_at, nonce = auth.create_enrollment(user.name)
-    key = auth.totp_key(user.name, nonce)
-    return LoginResult(status="enroll", username=user.name, challenge=challenge, expires_at=expires_at,
-                       totp_secret=totp.secret_text(key), totp_uri=totp.uri(key, user.name))
+    challenge, expires_at, nonce = await auth.create_enrollment(user.name)
+    return _enrollment(user.name, challenge, expires_at, nonce)
+
+
+def _enrollment(username: str, challenge: str, expires_at: int, nonce: str) -> LoginResult:
+    key = auth.totp_key(username, nonce)
+    return LoginResult(status="enroll", username=username, challenge=challenge, expires_at=expires_at,
+                       totp_secret=totp.secret_text(key), totp_uri=totp.uri(key, username))
 
 
 @router.post("/login/totp", response_model=LoginResult, operation_id="loginSecondFactor")
 async def login_second_factor(body: SecondFactorRequest, request: Request):
-    """Second step: a code from the authenticator (or a recovery code) for the challenge from `login`.
-    Five wrong codes lock the user's second step for 15 minutes, doubling with every further lockout."""
+    """Second step: a code from the authenticator (or a recovery code) for the challenge from `login`, or
+    the first code of the new authenticator for the challenge from `acceptInvite`. Five wrong codes lock the user's second step for 15 minutes, doubling with every further lockout."""
     client = await _client(request)
     if wait := auth.login_blocked(client):
         raise _too_many(wait, "failed sign-ins")
-    opened = auth.open_challenge(body.challenge)
+    opened = await auth.open_challenge(body.challenge)
     if opened is None:
         raise HTTPException(status_code=401, detail="The sign-in has expired; enter your password again.")
     kind, username, nonce = opened
@@ -111,18 +130,66 @@ async def login_second_factor(body: SecondFactorRequest, request: Request):
         if kind == auth.ENROLL:
             codes = await auth.enroll(username, nonce, body.code)
             ok = codes is not None
+        elif kind == auth.INVITE:
+            codes = await auth.finish_invite(username, nonce, body.code)
+            ok = codes is not None
         else:
             ok = await auth.check_second_factor(username, body.code)
     except auth.AlreadyEnrolled:
         raise HTTPException(status_code=409, detail="An authenticator is already set up; sign in again.")
+    except auth.InviteError as error:
+        raise HTTPException(status_code=410, detail=str(error))
     if not ok:
         auth.login_failed(client)
         auth.factor_failed(username)
         raise HTTPException(status_code=401, detail="Wrong code")
     auth.login_succeeded(client)
     auth.factor_succeeded(username)
-    token, expires_at = auth.create_token(username)
+    token, expires_at = await auth.create_token(username)
     return LoginResult(status="ok", username=username, token=token, expires_at=expires_at, recovery_codes=codes)
+
+
+INVITE_GONE = "This invite link is not valid: it has expired, was used already or was replaced by a newer one."
+
+
+async def _invite_attempt(request: Request) -> str:
+    client = await _client(request)
+    if wait := auth.login_blocked(client):
+        raise _too_many(wait, "failed attempts")
+    return client
+
+
+def _invite_gone(client: str) -> HTTPException:
+    auth.login_failed(client)
+    return HTTPException(status_code=410, detail=INVITE_GONE)
+
+
+@router.post("/invite", response_model=InviteInfo, operation_id="getInvite")
+async def get_invite(body: InviteRequest, request: Request):
+    """Who an invite link is for. 410 for a link that is unknown, used, replaced or expired; such attempts
+    count towards the per-address sign-in limit."""
+    client = await _invite_attempt(request)
+    opened = await auth.open_invite(body.token)
+    if opened is None:
+        raise _invite_gone(client)
+    username, expires_at = opened
+    return InviteInfo(username=username, expires_at=expires_at, password_min_length=auth.PASSWORD_MIN_LENGTH)
+
+
+@router.post("/invite/accept", response_model=LoginResult, operation_id="acceptInvite")
+async def accept_invite(body: AcceptInviteRequest, request: Request):
+    """Choose the password for an invite. Answers like `login` for a user without authenticator (`enroll`
+    with QR data); the password and the authenticator take effect once `loginSecondFactor` accepts the first
+    code. 400 for a password that is too weak, 410 for an unusable invite."""
+    client = await _invite_attempt(request)
+    try:
+        accepted = await auth.accept_invite(body.token, body.password)
+    except auth.InviteError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    if accepted is None:
+        raise _invite_gone(client)
+    username, challenge, expires_at, nonce = accepted
+    return _enrollment(username, challenge, expires_at, nonce)
 
 
 @router.get("/me", response_model=SessionInfo, operation_id="getSession")

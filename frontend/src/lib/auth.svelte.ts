@@ -1,5 +1,5 @@
 import { api } from '$lib/api/ApiService';
-import type { LoginResult } from '$lib/api/Api';
+import type { InviteInfo, LoginResult } from '$lib/api/Api';
 
 const TOKEN_KEY = 'gamefleet:token';
 
@@ -77,6 +77,19 @@ export async function login(username: string, password: string): Promise<LoginRe
 /** Second step: a code (or recovery code) for the challenge. On success the result carries the token. */
 export async function secondFactor(challenge: string, code: string): Promise<LoginResult> {
 	return (await api.login.loginSecondFactor({ challenge, code })).data;
+}
+
+/** Who an invite link (the token after '#') is for; fails with 410 for a used or expired one. */
+export async function getInvite(token: string): Promise<InviteInfo> {
+	return (await api.invite.getInvite({ token })).data;
+}
+
+/**
+ * Choose the password of an invite. The answer is an `enroll` challenge: the password takes effect together
+ * with the authenticator, once `secondFactor` accepts its first code.
+ */
+export async function acceptInvite(token: string, password: string): Promise<LoginResult> {
+	return (await api.invite.acceptInvite({ token, password })).data;
 }
 
 /** Start the session from a successful second step. */

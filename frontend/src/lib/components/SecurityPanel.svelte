@@ -5,7 +5,9 @@
 	import type { SecurityInfo } from '$lib/api/Api';
 	import { logoutEverywhere, session } from '$lib/auth.svelte';
 	import { confirmDialog } from '$lib/confirm.svelte';
+	import CodeInput from './CodeInput.svelte';
 	import Icon from './Icon.svelte';
+	import KnownUser from './KnownUser.svelte';
 	import RecoveryCodes from './RecoveryCodes.svelte';
 
 	let info = $state<SecurityInfo | null>(null);
@@ -30,6 +32,7 @@
 
 	async function renew(event: SubmitEvent) {
 		event.preventDefault();
+		if (busy) return;
 		busy = true;
 		error = null;
 		try {
@@ -39,6 +42,7 @@
 			code = '';
 			await load();
 		} catch (err) {
+			code = '';
 			error = detail(err, 'Could not create new recovery codes.');
 		} finally {
 			busy = false;
@@ -101,27 +105,20 @@
 				<button type="button" class="btn-ghost btn-sm" onclick={() => (codes = null)}>Done</button>
 			</div>
 		{:else if renewing}
-			<form class="flex flex-wrap items-end gap-2" onsubmit={renew}>
-				<div>
-					<label class="label" for="renew-code">Code from your authenticator app</label>
-					<input
-						id="renew-code"
-						class="input w-40 font-mono tracking-widest"
-						inputmode="numeric"
-						autocomplete="one-time-code"
-						maxlength="8"
-						bind:value={code}
-						required
-					/>
+			<form class="space-y-3" onsubmit={renew}>
+				<KnownUser username={session.username ?? ''} />
+				<p class="label">Code from your authenticator app</p>
+				<CodeInput bind:value={code} id="renew-code" disabled={busy} autofocus />
+				<div class="flex gap-2">
+					<button class="btn-primary btn-sm" type="submit" disabled={busy || code.length < 6}
+						>{busy ? 'Creating…' : 'Create new codes'}</button
+					>
+					<button
+						class="btn-ghost btn-sm"
+						type="button"
+						onclick={() => ((renewing = false), (code = ''))}>Cancel</button
+					>
 				</div>
-				<button class="btn-primary btn-sm h-9" type="submit" disabled={busy || !code.trim()}
-					>{busy ? 'Creating…' : 'Create new codes'}</button
-				>
-				<button
-					class="btn-ghost btn-sm h-9"
-					type="button"
-					onclick={() => ((renewing = false), (code = ''))}>Cancel</button
-				>
 			</form>
 		{/if}
 
@@ -138,7 +135,9 @@
 		<p class="hint">
 			Lost the authenticator and the recovery codes? On the host, <code class="font-mono"
 				>make reset-2fa U={session.username}</code
-			> removes it; the next sign-in sets up a new one.
+			>
+			removes it; the next sign-in sets up a new one. New users:
+			<code class="font-mono">make invite U=name</code>.
 		</p>
 	{/if}
 </section>
